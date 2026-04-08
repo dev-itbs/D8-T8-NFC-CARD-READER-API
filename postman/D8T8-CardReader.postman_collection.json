@@ -1,0 +1,359 @@
+{
+  "info": {
+    "name": "D8/T8 Card Reader API (dcrf32.dll)",
+    "description": "REST API for D8/T8 contactless smart card reader - Based on D8/T8 Reference Manual",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Card Operations",
+      "item": [
+        {
+          "name": "Detect Card",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mode\": 0}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/detect",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "detect"]
+            }
+          }
+        },
+        {
+          "name": "Read Card Block",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\", \"use_pass\": false}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/read",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "read"]
+            }
+          }
+        },
+        {
+          "name": "Read Card Block (with password)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\", \"use_pass\": true}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/read",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "read"]
+            }
+          }
+        },
+        {
+          "name": "Write Card Block",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\", \"data\": \"000102030405060708090A0B0C0D0E0F\", \"use_pass\": false}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/write",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "write"]
+            }
+          }
+        },
+        {
+          "name": "Write Card Block (with password)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\", \"data\": \"000102030405060708090A0B0C0D0E0F\", \"use_pass\": true}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/write",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "write"]
+            }
+          }
+        },
+        {
+          "name": "Halt Card",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/halt",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "halt"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Device Operations",
+      "item": [
+        {
+          "name": "Get Firmware Version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/device/version",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "device", "version"]
+            }
+          }
+        },
+        {
+          "name": "Beep",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"ms\": 100}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/device/beep",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "device", "beep"]
+            }
+          }
+        },
+        {
+          "name": "RF Reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"ms\": 2}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/device/reset",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "device", "reset"]
+            }
+          }
+        },
+        {
+          "name": "Read EEPROM",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"offset\": 0, \"length\": 64}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/device/eeprom/read",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "device", "eeprom", "read"]
+            }
+          }
+        },
+        {
+          "name": "Write EEPROM",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"offset\": 0, \"data\": \"48656C6C6F\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/device/eeprom/write",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "device", "eeprom", "write"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Value Block Operations",
+      "item": [
+        {
+          "name": "Initialize Value Block",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"block\": 10, \"value\": 1000}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/device/value/init",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "device", "value", "init"]
+            }
+          }
+        },
+        {
+          "name": "Increment Value Block",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"block\": 10, \"value\": 100}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/device/value/increment",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "device", "value", "increment"]
+            }
+          }
+        },
+        {
+          "name": "Decrement Value Block",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"block\": 10, \"value\": 50}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/device/value/decrement",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "device", "value", "decrement"]
+            }
+          }
+        },
+        {
+          "name": "Read Value Block",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"block\": 10}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/device/value/read",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "device", "value", "read"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "key_default",
+      "value": "FFFFFFFFFFFF",
+      "type": "string"
+    }
+  ]
+}
