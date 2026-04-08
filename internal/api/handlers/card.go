@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/dev-itbs/lto-reader-api/internal/models"
@@ -21,20 +22,25 @@ func NewCardHandlers(r *reader.Reader) *CardHandlers {
 
 // Detect detects a card and returns its serial number
 func (h *CardHandlers) Detect(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/detect")
 	var req models.CardDetectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[API] ERROR: Invalid JSON: %v", err)
 		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
 		return
 	}
 
+	log.Printf("[API] Detect request: mode=%d", req.Mode)
 	snr, err := h.Reader.DetectCard(req.Mode)
 	if err != nil {
+		log.Printf("[API] ERROR: DetectCard failed: %v", err)
 		// Parse the error to provide diagnostic info
 		diagErr := parseDLLError(err.Error(), "dc_card")
 		respondWithDiagnosticError(w, diagErr, http.StatusInternalServerError)
 		return
 	}
 
+	log.Printf("[API] Card detected: SNR=%08X", snr)
 	resp := models.Response{
 		Success: true,
 		Data: models.CardDetectResponse{

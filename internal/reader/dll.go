@@ -2,6 +2,7 @@ package reader
 
 import (
 	"fmt"
+	"log"
 	"syscall"
 )
 
@@ -13,10 +14,13 @@ type DLLLoader struct {
 
 // NewDLLLoader loads the DC SDK DLL and initializes all function pointers
 func NewDLLLoader(dllName string) (*DLLLoader, error) {
+	log.Printf("[DLL] Loading DLL: %s", dllName)
 	dll, err := syscall.LoadDLL(dllName)
 	if err != nil {
+		log.Printf("[DLL] ERROR: Failed to load %s: %v", dllName, err)
 		return nil, fmt.Errorf("failed to load %s: %w", dllName, err)
 	}
+	log.Printf("[DLL] Successfully loaded: %s", dllName)
 
 	loader := &DLLLoader{
 		dll:   dll,
@@ -27,7 +31,6 @@ func NewDLLLoader(dllName string) (*DLLLoader, error) {
 	procNames := []string{
 		"dc_init",
 		"dc_exit",
-		"dc_card",
 		"dc_request",
 		"dc_anticoll",
 		"dc_select",
@@ -51,10 +54,12 @@ func NewDLLLoader(dllName string) (*DLLLoader, error) {
 	for _, name := range procNames {
 		proc, err := dll.FindProc(name)
 		if err != nil {
+			log.Printf("[DLL] ERROR: Failed to find function %s: %v", name, err)
 			return nil, fmt.Errorf("failed to find function %s: %w", name, err)
 		}
 		loader.procs[name] = proc
 	}
+	log.Printf("[DLL] All %d functions loaded successfully", len(procNames))
 
 	return loader, nil
 }
@@ -80,9 +85,13 @@ func (dl *DLLLoader) Close() error {
 func (dl *DLLLoader) Call(funcName string, args ...uintptr) (int, error) {
 	proc, err := dl.GetProc(funcName)
 	if err != nil {
+		log.Printf("[CALL] ERROR: %s - %v", funcName, err)
 		return 0, err
 	}
 
+	log.Printf("[CALL] %s with %d args", funcName, len(args))
 	ret, _, err := proc.Call(args...)
-	return int(ret), nil
+	retVal := int(ret)
+	log.Printf("[CALL] %s returned: %d", funcName, retVal)
+	return retVal, nil
 }

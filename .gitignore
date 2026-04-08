@@ -1,7 +1,6 @@
 # Binaries for programs and plugins
 *.exe
 *.exe~
-*.dll
 *.so
 *.so.*
 *.dylib
@@ -27,7 +26,6 @@ go.work
 .DS_Store
 
 # Environment files
-.env
 .env.local
 .env.*.local
 
@@ -38,3 +36,7 @@ Thumbs.db
 # Build output
 /bin/
 /dist/
+
+# Logs
+/logs/
+*.log

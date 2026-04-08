@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -23,13 +25,19 @@ func main() {
 		log.Fatalf("Configuration error: %v", err)
 	}
 
+	// Setup logging to file
+	if err := setupLogging(cfg.LogFile); err != nil {
+		log.Fatalf("Failed to setup logging: %v", err)
+	}
+
 	log.Printf("Starting D8/T8 Card Reader API")
 	log.Printf("Reader Port: %d, Baud: %d", cfg.ReaderPort, cfg.ReaderBaud)
 	log.Printf("Server Address: %s", cfg.ServerAddr)
-	log.Printf("DLL Name: %s", cfg.DLLName)
+	log.Printf("DLL Path: %s", cfg.DLLPath)
+	log.Printf("Log File: %s", cfg.LogFile)
 
 	// Initialize the card reader
-	r, err := reader.New(cfg.DLLName, cfg.ReaderPort, cfg.ReaderBaud)
+	r, err := reader.New(cfg.DLLPath, cfg.ReaderPort, cfg.ReaderBaud)
 	if err != nil {
 		log.Fatalf("Failed to initialize reader: %v", err)
 	}
@@ -73,4 +81,26 @@ func main() {
 	}
 
 	log.Println("Server stopped")
+}
+
+// setupLogging configures logging to both console and file
+func setupLogging(logFile string) error {
+	// Create logs directory if it doesn't exist
+	logDir := filepath.Dir(logFile)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return err
+	}
+
+	// Open log file for writing (append mode)
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+
+	// Write to both console and file
+	multiWriter := io.MultiWriter(os.Stdout, file)
+	log.SetOutput(multiWriter)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	return nil
 }

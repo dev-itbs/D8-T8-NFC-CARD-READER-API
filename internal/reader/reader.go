@@ -3,6 +3,7 @@ package reader
 import (
 	"encoding/hex"
 	"fmt"
+	"log"
 	"sync"
 	"unsafe"
 )
@@ -16,23 +17,29 @@ type Reader struct {
 
 // New initializes the reader on the specified port and baud rate
 func New(dllName string, port, baud int) (*Reader, error) {
+	log.Printf("[READER] Initializing reader: dll=%s, port=%d, baud=%d", dllName, port, baud)
 	loader, err := NewDLLLoader(dllName)
 	if err != nil {
+		log.Printf("[READER] ERROR: Failed to load DLL: %v", err)
 		return nil, err
 	}
 
 	// Call dc_init(port, baud)
+	log.Printf("[READER] Calling dc_init...")
 	ret, err := loader.Call("dc_init", uintptr(port), uintptr(baud))
 	if err != nil {
+		log.Printf("[READER] ERROR: dc_init failed: %v", err)
 		loader.Close()
 		return nil, fmt.Errorf("dc_init failed: %w", err)
 	}
 
 	if ret <= 0 {
+		log.Printf("[READER] ERROR: dc_init returned invalid value: %d", ret)
 		loader.Close()
 		return nil, fmt.Errorf("dc_init returned %d (expected > 0)", ret)
 	}
 
+	log.Printf("[READER] Initialized successfully with icdev=%d", ret)
 	return &Reader{
 		loader: loader,
 		icdev:  uintptr(ret),
@@ -62,21 +69,51 @@ func (r *Reader) Close() error {
 	return nil
 }
 
-// DetectCard detects a card and returns its serial number
-// mode: 0 = IDLE, 1 = ALL
+// DetectCard detects a card using the proper workflow: request -> anticoll -> select
 func (r *Reader) DetectCard(mode int) (uint32, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	var snr uint32
-	ret, err := r.loader.Call("dc_card", r.icdev, uintptr(mode), uintptr(unsafe.Pointer(&snr)))
-	if err != nil {
-		return 0, fmt.Errorf("dc_card failed: %w", err)
-	}
+	log.Printf("[READER] DetectCard: Starting card detection workflow, mode=%d", mode)
 
-	if ret != 0 {
-		return 0, fmt.Errorf("dc_card returned %d (no card or error)", ret)
+	// Step 1: Request card
+	var tagType uint16
+	ret, err := r.loader.Call("dc_request", r.icdev, uintptr(mode), uintptr(unsafe.Pointer(&tagType)))
+	if err != nil {
+		log.Printf("[READER] dc_request ERROR: %v", err)
+		return 0, fmt.Errorf("dc_request failed: %w", err)
 	}
+	if ret != 0 {
+		log.Printf("[READER] dc_request failed: ret=%d (no card present or communication error)", ret)
+		return 0, fmt.Errorf("dc_request returned %d (no card detected)", ret)
+	}
+	log.Printf("[READER] Card requested, tag type=%04X", tagType)
+
+	// Step 2: Anti-collision
+	var snr uint32
+	ret, err = r.loader.Call("dc_anticoll", r.icdev, uintptr(0), uintptr(unsafe.Pointer(&snr)))
+	if err != nil {
+		log.Printf("[READER] dc_anticoll ERROR: %v", err)
+		return 0, fmt.Errorf("dc_anticoll failed: %w", err)
+	}
+	if ret != 0 {
+		log.Printf("[READER] dc_anticoll failed: ret=%d", ret)
+		return 0, fmt.Errorf("dc_anticoll returned %d", ret)
+	}
+	log.Printf("[READER] Card anticoll successful, SNR=%08X", snr)
+
+	// Step 3: Select card
+	var size uint8
+	ret, err = r.loader.Call("dc_select", r.icdev, uintptr(snr), uintptr(unsafe.Pointer(&size)))
+	if err != nil {
+		log.Printf("[READER] dc_select ERROR: %v", err)
+		return 0, fmt.Errorf("dc_select failed: %w", err)
+	}
+	if ret != 0 {
+		log.Printf("[READER] dc_select failed: ret=%d", ret)
+		return 0, fmt.Errorf("dc_select returned %d", ret)
+	}
+	log.Printf("[READER] Card selected successfully, size=%d", size)
 
 	return snr, nil
 }
