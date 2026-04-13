@@ -20,6 +20,16 @@ type CardReadResponse struct {
 	DataBytes []byte `json:"data_bytes"` // Raw byte array
 }
 
+// CardReadAllResponse is the response for reading all blocks from the card
+type CardReadAllResponse struct {
+	SNRHex        string            `json:"snr_hex"`        // Card serial number
+	SNRDecimal    uint32            `json:"snr_decimal"`    // Card serial number (decimal)
+	TotalBytes    int               `json:"total_bytes"`    // Total bytes read (1024 for Mifare 1K)
+	FullData      string            `json:"full_data"`      // All 64 blocks concatenated (2048 hex chars)
+	FullDataBase64 string           `json:"full_data_base64"` // Base64 encoded full data
+	BlockMap      map[string]string `json:"blocks"`         // Individual blocks by number
+}
+
 // CardWriteResponse is the response for writing a card block (empty data, just success)
 type CardWriteResponse struct{}
 

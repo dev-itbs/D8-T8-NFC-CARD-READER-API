@@ -124,15 +124,21 @@ func (r *Reader) LoadKey(mode, sector int, key [6]byte) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	keyHex := fmt.Sprintf("%02X%02X%02X%02X%02X%02X", key[0], key[1], key[2], key[3], key[4], key[5])
+	log.Printf("[READER] LoadKey: mode=%d, sector=%d, key=%s", mode, sector, keyHex)
+
 	ret, err := r.loader.Call("dc_load_key", r.icdev, uintptr(mode), uintptr(sector), uintptr(unsafe.Pointer(&key[0])))
 	if err != nil {
+		log.Printf("[READER] LoadKey ERROR: %v", err)
 		return fmt.Errorf("dc_load_key failed: %w", err)
 	}
 
 	if ret != 0 {
+		log.Printf("[READER] LoadKey failed: ret=%d (key may be incorrect)", ret)
 		return fmt.Errorf("dc_load_key returned %d", ret)
 	}
 
+	log.Printf("[READER] LoadKey successful")
 	return nil
 }
 
@@ -141,15 +147,19 @@ func (r *Reader) Authenticate(mode, sector int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	log.Printf("[READER] Authenticate: mode=%d, sector=%d", mode, sector)
 	ret, err := r.loader.Call("dc_authentication", r.icdev, uintptr(mode), uintptr(sector))
 	if err != nil {
+		log.Printf("[READER] Authenticate ERROR: %v", err)
 		return fmt.Errorf("dc_authentication failed: %w", err)
 	}
 
 	if ret != 0 {
-		return fmt.Errorf("dc_authentication returned %d", ret)
+		log.Printf("[READER] Authenticate failed: ret=%d (check key is correct for this card, default is FFFFFFFFFFFF)", ret)
+		return fmt.Errorf("dc_authentication returned %d (wrong key or invalid sector)", ret)
 	}
 
+	log.Printf("[READER] Authenticate successful")
 	return nil
 }
 
@@ -172,37 +182,49 @@ func (r *Reader) AuthenticateWithPass(mode, blockAddr int, key [6]byte) error {
 }
 
 // ReadBlock reads 16 bytes from a block
+// addr: Block address (0-63). Calculate from: block_addr = sector * 4 + block_within_sector
 func (r *Reader) ReadBlock(addr int) ([16]byte, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	log.Printf("[READER] ReadBlock: addr=%d (sector=%d, block_in_sector=%d)", addr, addr/4, addr%4)
 	var data [16]byte
 	ret, err := r.loader.Call("dc_read", r.icdev, uintptr(addr), uintptr(unsafe.Pointer(&data[0])))
 	if err != nil {
+		log.Printf("[READER] ReadBlock ERROR: %v", err)
 		return data, fmt.Errorf("dc_read failed: %w", err)
 	}
 
 	if ret != 0 {
-		return data, fmt.Errorf("dc_read returned %d", ret)
+		log.Printf("[READER] ReadBlock failed: ret=%d (block protected or authentication failed)", ret)
+		return data, fmt.Errorf("dc_read returned %d (ensure authentication succeeded)", ret)
 	}
 
+	log.Printf("[READER] ReadBlock successful: %s", DataToHex(data))
 	return data, nil
 }
 
 // WriteBlock writes 16 bytes to a block
+// addr: Block address (0-63). Calculate from: block_addr = sector * 4 + block_within_sector
 func (r *Reader) WriteBlock(addr int, data [16]byte) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	log.Printf("[READER] WriteBlock: addr=%d (sector=%d, block_in_sector=%d), data=%s",
+		addr, addr/4, addr%4, DataToHex(data))
+
 	ret, err := r.loader.Call("dc_write", r.icdev, uintptr(addr), uintptr(unsafe.Pointer(&data[0])))
 	if err != nil {
+		log.Printf("[READER] WriteBlock ERROR: %v", err)
 		return fmt.Errorf("dc_write failed: %w", err)
 	}
 
 	if ret != 0 {
-		return fmt.Errorf("dc_write returned %d", ret)
+		log.Printf("[READER] WriteBlock failed: ret=%d (block read-only, protected, or auth failed)", ret)
+		return fmt.Errorf("dc_write returned %d (block may be read-only or unauth)", ret)
 	}
 
+	log.Printf("[READER] WriteBlock successful")
 	return nil
 }
 

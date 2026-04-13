@@ -73,3 +73,11 @@ type DecrementRequest struct {
 type ReadValRequest struct {
 	Block int `json:"block"` // Block address
 }
+
+// CardReadAllRequest is the request for reading all blocks from the card
+type CardReadAllRequest struct {
+	Mode    int    `json:"mode"`           // 0 = IDLE, 1 = ALL
+	KeyMode int    `json:"key_mode"`       // 0-2 for KEY A, 4-6 for KEY B
+	Key     string `json:"key"`            // Hex string (12 chars for 6 bytes)
+	UsePass bool   `json:"use_pass"`       // If true, use dc_authentication_pass
+}
