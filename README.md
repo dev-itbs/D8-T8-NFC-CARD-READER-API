@@ -10,6 +10,7 @@ A Go REST API for reading and writing contactless smart cards using the D8/T8 ca
 - **EEPROM Management**: Read/write device EEPROM
 - **Value Blocks**: Initialize, increment, decrement, and read value blocks
 - **RESTful API**: Clean JSON-based REST endpoints
+- **Interactive Docs**: Swagger UI available at `/api/docs`
 - **Cross-platform**: No CGO required (uses syscall.LoadDLL on Windows)
 
 ## Requirements
@@ -61,6 +62,19 @@ Set via environment variables:
 | `DLL_NAME` | `dc_sdk.dll` | Path to the DC SDK DLL |
 | `GRACEFUL_WAIT` | `5` | Graceful shutdown timeout (seconds) |
 | `BRANCA_SALT` | `""` | Salt used for SHA256-based Branca key derivation (`-sha` endpoints) |
+
+## API Documentation
+
+The server ships an interactive Swagger UI built from an embedded OpenAPI 3.0 spec — no external tools needed.
+
+| URL | Description |
+|-----|-------------|
+| `http://localhost:8080/api/docs` | Swagger UI (open in browser) |
+| `http://localhost:8080/api/docs/openapi.json` | Raw OpenAPI 3.0 JSON spec |
+
+The Swagger UI lets you read every endpoint's request/response schema and try requests directly from the browser. The spec file can also be imported into Postman, Insomnia, or any OpenAPI-compatible tool.
+
+---
 
 ## API Endpoints
 
@@ -675,6 +689,8 @@ D:\PROJECTS\LTO\READER-API\
 │   │   └── reader.go            # Reader service wrapper
 │   ├── api/
 │   │   ├── router.go            # Chi router configuration
+│   │   ├── docs.go              # Swagger UI + OpenAPI spec handlers
+│   │   ├── openapi.json         # OpenAPI 3.0 spec (embedded into binary)
 │   │   └── handlers/
 │   │       ├── health.go        # Health check handler
 │   │       ├── card.go          # Card operation handlers
