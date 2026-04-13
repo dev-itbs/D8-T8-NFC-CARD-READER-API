@@ -20,6 +20,10 @@ func NewRouter(r *reader.Reader, salt string) *chi.Mux {
 	// Health check
 	router.Get("/health", handlers.HealthHandler)
 
+	// Swagger docs
+	router.Get("/api/docs", docsHandler)
+	router.Get("/api/docs/openapi.json", openapiHandler)
+
 	// Card operations
 	cardHandlers := handlers.NewCardHandlers(r, salt)
 	router.Post("/api/v1/card/detect", cardHandlers.Detect)

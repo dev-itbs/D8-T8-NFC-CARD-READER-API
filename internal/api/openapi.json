@@ -1,0 +1,1337 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "LTO NFC Card Reader API",
+    "description": "REST API for reading and writing Mifare 1K NFC cards using the D8T8 reader device (dcrf32.dll). Supports MD5 and SHA256+Salt Branca token encoding for secure data storage on cards.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Local server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "API liveness check"
+    },
+    {
+      "name": "Card - Basic",
+      "description": "Detect, read, and write raw card blocks"
+    },
+    {
+      "name": "Card - MD5",
+      "description": "Branca token operations — key derived as hex(MD5(snr_decimal))"
+    },
+    {
+      "name": "Card - SHA256",
+      "description": "Branca token operations — key derived as SHA256(snr_decimal + BRANCA_SALT)"
+    },
+    {
+      "name": "Device",
+      "description": "Firmware version and device control (beep, reset)"
+    },
+    {
+      "name": "EEPROM",
+      "description": "Device EEPROM read/write"
+    },
+    {
+      "name": "Value Block",
+      "description": "Mifare value block operations (init, increment, decrement, read)"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health Check",
+        "description": "Returns the current status of the API server.",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "API is running",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Response" },
+                "example": { "success": true, "message": "OK" }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "/api/v1/card/detect": {
+      "post": {
+        "tags": ["Card - Basic"],
+        "summary": "Detect Card",
+        "description": "Places the reader into detection mode and returns the card's Serial Number (SNR) in both hex and decimal.",
+        "operationId": "detectCard",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CardDetectRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Card detected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/CardDetectData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/card/read": {
+      "post": {
+        "tags": ["Card - Basic"],
+        "summary": "Read Single Block",
+        "description": "Authenticates and reads one 16-byte block from the card. Returns data as a 32-character hex string.",
+        "operationId": "readBlock",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CardReadRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Block read successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/CardReadData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/card/write": {
+      "post": {
+        "tags": ["Card - Basic"],
+        "summary": "Write Single Block",
+        "description": "Authenticates and writes one 16-byte block to the card. `data` must be a 32-character hex string.",
+        "operationId": "writeBlock",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CardWriteRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Block written successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Response" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/card/read-all": {
+      "post": {
+        "tags": ["Card - Basic"],
+        "summary": "Read All Blocks",
+        "description": "Reads all 64 blocks (1024 bytes) of a Mifare 1K card. Returns a per-block map, full hex dump, and base64-encoded data.",
+        "operationId": "readAllBlocks",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CardReadAllRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "All blocks read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/CardReadAllData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/card/halt": {
+      "post": {
+        "tags": ["Card - Basic"],
+        "summary": "Halt Card",
+        "description": "Sends the HALT command to deselect the card from the RF field.",
+        "operationId": "haltCard",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Card halted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Response" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/card/decode-md5": {
+      "post": {
+        "tags": ["Card - MD5"],
+        "summary": "Decode Branca Token (MD5)",
+        "description": "Decodes a Branca token offline. Derives the 32-byte key as `hex(MD5(string(snr_decimal)))`.",
+        "operationId": "decodeMD5",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CardDecodeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token decoded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/CardDecodeData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/card/read-decoded-md5": {
+      "post": {
+        "tags": ["Card - MD5"],
+        "summary": "Read & Decode (MD5)",
+        "description": "Reads the card, extracts the embedded NDEF Branca token, and decodes it using MD5 key derivation. Automatically falls back to well-known NDEF keys (D3F7D3F7D3F7, A0A1A2A3A4A5, FFFFFFFFFFFF) on auth failure.",
+        "operationId": "readDecodedMD5",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CardReadDecodedRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Card read and decoded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/CardReadDecodedData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/DetailedError" }
+        }
+      }
+    },
+
+    "/api/v1/card/write-encoded-md5": {
+      "post": {
+        "tags": ["Card - MD5"],
+        "summary": "Encode & Write (MD5)",
+        "description": "Encodes the supplied JSON `data` as a Branca token (key = hex(MD5(snr_decimal))) and writes it to the card in NDEF TLV format.",
+        "operationId": "writeEncodedMD5",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CardWriteEncodedRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Data encoded and written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/CardWriteEncodedData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/card/decode-sha": {
+      "post": {
+        "tags": ["Card - SHA256"],
+        "summary": "Decode Branca Token (SHA256)",
+        "description": "Decodes a Branca token offline. Derives the 32-byte key as `SHA256(string(snr_decimal) + BRANCA_SALT)`. Requires `BRANCA_SALT` env var.",
+        "operationId": "decodeSHA",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CardDecodeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token decoded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/CardDecodeData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/card/read-decoded-sha": {
+      "post": {
+        "tags": ["Card - SHA256"],
+        "summary": "Read & Decode (SHA256)",
+        "description": "Reads the card, extracts the embedded NDEF Branca token, and decodes it using SHA256+Salt key derivation. Requires `BRANCA_SALT` env var.",
+        "operationId": "readDecodedSHA",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CardReadDecodedRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Card read and decoded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/CardReadDecodedData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/DetailedError" }
+        }
+      }
+    },
+
+    "/api/v1/card/write-encoded-sha": {
+      "post": {
+        "tags": ["Card - SHA256"],
+        "summary": "Encode & Write (SHA256)",
+        "description": "Encodes the supplied JSON `data` as a Branca token (key = SHA256(snr_decimal + BRANCA_SALT)) and writes it to the card in NDEF TLV format. Requires `BRANCA_SALT` env var.",
+        "operationId": "writeEncodedSHA",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CardWriteEncodedRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Data encoded and written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/CardWriteEncodedData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/device/version": {
+      "get": {
+        "tags": ["Device"],
+        "summary": "Get Firmware Version",
+        "description": "Returns the firmware version string reported by the reader device.",
+        "operationId": "getVersion",
+        "responses": {
+          "200": {
+            "description": "Version retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/VersionData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/device/beep": {
+      "post": {
+        "tags": ["Device"],
+        "summary": "Trigger Buzzer",
+        "description": "Triggers the device buzzer for the specified number of milliseconds.",
+        "operationId": "beep",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DeviceBeepRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Beep triggered",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Response" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/device/reset": {
+      "post": {
+        "tags": ["Device"],
+        "summary": "RF Reset",
+        "description": "Performs an RF field reset on the reader device.",
+        "operationId": "reset",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DeviceResetRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reset performed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Response" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/device/eeprom/read": {
+      "post": {
+        "tags": ["EEPROM"],
+        "summary": "Read EEPROM",
+        "description": "Reads `length` bytes from the device EEPROM starting at `offset`.",
+        "operationId": "readEEPROM",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EEPROMReadRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "EEPROM read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/EEPROMReadData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/device/eeprom/write": {
+      "post": {
+        "tags": ["EEPROM"],
+        "summary": "Write EEPROM",
+        "description": "Writes a hex-encoded byte sequence to the device EEPROM at `offset`.",
+        "operationId": "writeEEPROM",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EEPROMWriteRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "EEPROM written",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Response" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/device/value/init": {
+      "post": {
+        "tags": ["Value Block"],
+        "summary": "Initialize Value Block",
+        "description": "Formats a block as a Mifare value block with an initial integer value.",
+        "operationId": "initVal",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InitValRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Value block initialized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Response" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/device/value/increment": {
+      "post": {
+        "tags": ["Value Block"],
+        "summary": "Increment Value Block",
+        "description": "Adds the given amount to a Mifare value block.",
+        "operationId": "incrementVal",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/IncrementRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Value block incremented",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Response" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/device/value/decrement": {
+      "post": {
+        "tags": ["Value Block"],
+        "summary": "Decrement Value Block",
+        "description": "Subtracts the given amount from a Mifare value block.",
+        "operationId": "decrementVal",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DecrementRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Value block decremented",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Response" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+
+    "/api/v1/device/value/read": {
+      "post": {
+        "tags": ["Value Block"],
+        "summary": "Read Value Block",
+        "description": "Returns the current integer value stored in a Mifare value block.",
+        "operationId": "readVal",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReadValRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Value block read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Response" },
+                    {
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/ReadValData" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+
+  "components": {
+    "schemas": {
+      "Response": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the operation succeeded",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable status message"
+          },
+          "code": {
+            "type": "integer",
+            "description": "Internal status / error code"
+          },
+          "data": {
+            "description": "Response payload — schema varies per endpoint"
+          }
+        }
+      },
+
+      "ErrorBody": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string" },
+          "code": { "type": "integer" }
+        }
+      },
+
+      "DetailedErrorBody": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "error": { "type": "string", "description": "Short error identifier" },
+          "error_code": { "type": "integer", "description": "DLL error code" },
+          "function": { "type": "string", "description": "DLL function that failed" },
+          "message": { "type": "string" },
+          "suggestion": { "type": "string", "description": "Actionable remediation hint" },
+          "details": { "type": "string", "description": "Full DLL error string" },
+          "card_type": { "type": "string" },
+          "retryable": { "type": "boolean" },
+          "documentation": { "type": "string" },
+          "code": { "type": "integer" }
+        }
+      },
+
+      "CardDetectRequest": {
+        "type": "object",
+        "required": ["mode"],
+        "properties": {
+          "mode": {
+            "type": "integer",
+            "description": "Detection mode — 0: IDLE (halt after detect), 1: ALL (continuous)",
+            "enum": [0, 1],
+            "example": 1
+          }
+        }
+      },
+
+      "CardDetectData": {
+        "type": "object",
+        "properties": {
+          "snr_hex": {
+            "type": "string",
+            "description": "Card SNR as hex string",
+            "example": "0x1A2B3C4D"
+          },
+          "snr_decimal": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Card SNR as unsigned 32-bit decimal",
+            "example": 439041101
+          }
+        }
+      },
+
+      "CardReadRequest": {
+        "type": "object",
+        "required": ["mode", "sector", "block", "key_mode", "key"],
+        "properties": {
+          "mode": {
+            "type": "integer",
+            "description": "Detection mode — 0: IDLE, 1: ALL",
+            "enum": [0, 1],
+            "example": 1
+          },
+          "sector": {
+            "type": "integer",
+            "description": "Sector number (0–15)",
+            "minimum": 0,
+            "maximum": 15,
+            "example": 1
+          },
+          "block": {
+            "type": "integer",
+            "description": "Absolute block number (0–63). Block 0 of sector N = N*4.",
+            "minimum": 0,
+            "maximum": 63,
+            "example": 4
+          },
+          "key_mode": {
+            "type": "integer",
+            "description": "Auth key type — 0–2: KEY A mode 0/1/2, 4–6: KEY B mode 0/1/2",
+            "example": 0
+          },
+          "key": {
+            "type": "string",
+            "description": "Authentication key — 12 hex characters (6 bytes)",
+            "pattern": "^[0-9a-fA-F]{12}$",
+            "example": "FFFFFFFFFFFF"
+          },
+          "use_pass": {
+            "type": "boolean",
+            "description": "true: AuthenticateWithPass (single call); false: LoadKey + Authenticate",
+            "default": false
+          }
+        }
+      },
+
+      "CardReadData": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Block data as 32-char hex string (16 bytes)",
+            "example": "00112233445566778899AABBCCDDEEFF"
+          },
+          "data_bytes": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "description": "Block data as a raw byte array (16 elements)"
+          }
+        }
+      },
+
+      "CardWriteRequest": {
+        "type": "object",
+        "required": ["mode", "sector", "block", "key_mode", "key", "data"],
+        "properties": {
+          "mode": {
+            "type": "integer",
+            "description": "Detection mode — 0: IDLE, 1: ALL",
+            "enum": [0, 1],
+            "example": 1
+          },
+          "sector": {
+            "type": "integer",
+            "description": "Sector number (0–15)",
+            "minimum": 0,
+            "maximum": 15,
+            "example": 1
+          },
+          "block": {
+            "type": "integer",
+            "description": "Absolute block number (0–63)",
+            "minimum": 0,
+            "maximum": 63,
+            "example": 4
+          },
+          "key_mode": {
+            "type": "integer",
+            "description": "Auth key type — 0–2: KEY A, 4–6: KEY B",
+            "example": 0
+          },
+          "key": {
+            "type": "string",
+            "description": "Authentication key — 12 hex characters (6 bytes)",
+            "pattern": "^[0-9a-fA-F]{12}$",
+            "example": "FFFFFFFFFFFF"
+          },
+          "data": {
+            "type": "string",
+            "description": "Data to write — 32 hex characters (16 bytes)",
+            "pattern": "^[0-9a-fA-F]{32}$",
+            "example": "48656C6C6F20576F726C6421000000"
+          },
+          "use_pass": {
+            "type": "boolean",
+            "description": "true: AuthenticateWithPass; false: LoadKey + Authenticate",
+            "default": false
+          }
+        }
+      },
+
+      "CardReadAllRequest": {
+        "type": "object",
+        "required": ["mode", "key_mode", "key"],
+        "properties": {
+          "mode": {
+            "type": "integer",
+            "description": "Detection mode — 0: IDLE, 1: ALL",
+            "enum": [0, 1],
+            "example": 1
+          },
+          "key_mode": {
+            "type": "integer",
+            "description": "Auth key type — 0–2: KEY A, 4–6: KEY B",
+            "example": 0
+          },
+          "key": {
+            "type": "string",
+            "description": "Authentication key — 12 hex characters (6 bytes)",
+            "pattern": "^[0-9a-fA-F]{12}$",
+            "example": "FFFFFFFFFFFF"
+          },
+          "use_pass": {
+            "type": "boolean",
+            "description": "true: AuthenticateWithPass; false: LoadKey + Authenticate",
+            "default": false
+          }
+        }
+      },
+
+      "CardReadAllData": {
+        "type": "object",
+        "properties": {
+          "snr_hex": {
+            "type": "string",
+            "description": "Card SNR as hex string",
+            "example": "0x1A2B3C4D"
+          },
+          "snr_decimal": {
+            "type": "integer",
+            "format": "int64",
+            "example": 439041101
+          },
+          "total_bytes": {
+            "type": "integer",
+            "description": "Total bytes read (1024 for Mifare 1K)",
+            "example": 1024
+          },
+          "full_data": {
+            "type": "string",
+            "description": "All 64 blocks concatenated as a 2048-char hex string"
+          },
+          "full_data_base64": {
+            "type": "string",
+            "description": "All block data base64-encoded"
+          },
+          "blocks": {
+            "type": "object",
+            "description": "Per-block hex data keyed by block number (\"0\"–\"63\")",
+            "additionalProperties": { "type": "string" },
+            "example": {
+              "0": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+              "1": "00000000000000000000000000000000"
+            }
+          }
+        }
+      },
+
+      "CardDecodeRequest": {
+        "type": "object",
+        "required": ["branca_token", "snr_decimal"],
+        "properties": {
+          "branca_token": {
+            "type": "string",
+            "description": "Branca token string (from a previous read or write operation)",
+            "example": "875GH233T7IYD3B..."
+          },
+          "snr_decimal": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Card SNR in decimal — used to derive the decryption key",
+            "example": 439041101
+          }
+        }
+      },
+
+      "CardDecodeData": {
+        "type": "object",
+        "properties": {
+          "snr_decimal": {
+            "type": "integer",
+            "format": "int64",
+            "example": 439041101
+          },
+          "branca_token": {
+            "type": "string",
+            "description": "The original Branca token"
+          },
+          "payload": {
+            "description": "Decoded payload — JSON object/array or plain string depending on what was written"
+          }
+        }
+      },
+
+      "CardReadDecodedRequest": {
+        "type": "object",
+        "required": ["mode", "key_mode", "key"],
+        "properties": {
+          "mode": {
+            "type": "integer",
+            "description": "Detection mode — 0: IDLE, 1: ALL",
+            "enum": [0, 1],
+            "example": 1
+          },
+          "key_mode": {
+            "type": "integer",
+            "description": "Auth key type — 0–2: KEY A, 4–6: KEY B",
+            "example": 0
+          },
+          "key": {
+            "type": "string",
+            "description": "Authentication key — 12 hex characters (6 bytes)",
+            "pattern": "^[0-9a-fA-F]{12}$",
+            "example": "FFFFFFFFFFFF"
+          },
+          "use_pass": {
+            "type": "boolean",
+            "description": "true: AuthenticateWithPass; false: LoadKey + Authenticate",
+            "default": false
+          }
+        }
+      },
+
+      "CardReadDecodedData": {
+        "type": "object",
+        "properties": {
+          "snr_hex": {
+            "type": "string",
+            "description": "Card SNR as hex string",
+            "example": "0x1A2B3C4D"
+          },
+          "snr_decimal": {
+            "type": "integer",
+            "format": "int64",
+            "example": 439041101
+          },
+          "branca_token": {
+            "type": "string",
+            "description": "Raw Branca token extracted from the card's NDEF TLV data"
+          },
+          "payload": {
+            "description": "Decoded JSON payload from the Branca token"
+          }
+        }
+      },
+
+      "CardWriteEncodedRequest": {
+        "type": "object",
+        "required": ["mode", "key_mode", "key", "data"],
+        "properties": {
+          "mode": {
+            "type": "integer",
+            "description": "Detection mode — 0: IDLE, 1: ALL",
+            "enum": [0, 1],
+            "example": 1
+          },
+          "key_mode": {
+            "type": "integer",
+            "description": "Auth key type — 0–2: KEY A, 4–6: KEY B",
+            "example": 0
+          },
+          "key": {
+            "type": "string",
+            "description": "Authentication key — 12 hex characters (6 bytes)",
+            "pattern": "^[0-9a-fA-F]{12}$",
+            "example": "FFFFFFFFFFFF"
+          },
+          "use_pass": {
+            "type": "boolean",
+            "description": "true: AuthenticateWithPass; false: LoadKey + Authenticate",
+            "default": false
+          },
+          "data": {
+            "description": "Any JSON value to encode as a Branca token and write to the card (object, array, string, number…)",
+            "example": { "license_no": "A12345678", "name": "Juan Dela Cruz" }
+          }
+        }
+      },
+
+      "CardWriteEncodedData": {
+        "type": "object",
+        "properties": {
+          "snr_hex": {
+            "type": "string",
+            "description": "Card SNR as hex string",
+            "example": "0x1A2B3C4D"
+          },
+          "snr_decimal": {
+            "type": "integer",
+            "format": "int64",
+            "example": 439041101
+          },
+          "branca_token": {
+            "type": "string",
+            "description": "The Branca token written to the card"
+          },
+          "bytes_written": {
+            "type": "integer",
+            "description": "Total bytes written to the card"
+          },
+          "blocks_written": {
+            "type": "integer",
+            "description": "Number of blocks written"
+          }
+        }
+      },
+
+      "VersionData": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "description": "Firmware version string from the reader",
+            "example": "D8T8-V2.0"
+          }
+        }
+      },
+
+      "DeviceBeepRequest": {
+        "type": "object",
+        "required": ["ms"],
+        "properties": {
+          "ms": {
+            "type": "integer",
+            "description": "Buzzer duration in milliseconds",
+            "example": 200
+          }
+        }
+      },
+
+      "DeviceResetRequest": {
+        "type": "object",
+        "required": ["ms"],
+        "properties": {
+          "ms": {
+            "type": "integer",
+            "description": "Reset duration in milliseconds",
+            "example": 100
+          }
+        }
+      },
+
+      "EEPROMReadRequest": {
+        "type": "object",
+        "required": ["offset", "length"],
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "description": "Starting byte offset in EEPROM (0–383)",
+            "minimum": 0,
+            "maximum": 383,
+            "example": 0
+          },
+          "length": {
+            "type": "integer",
+            "description": "Number of bytes to read (1–384)",
+            "minimum": 1,
+            "maximum": 384,
+            "example": 16
+          }
+        }
+      },
+
+      "EEPROMReadData": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "EEPROM bytes as a hex string",
+            "example": "AABBCCDD"
+          },
+          "bytes": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "description": "Raw EEPROM bytes"
+          }
+        }
+      },
+
+      "EEPROMWriteRequest": {
+        "type": "object",
+        "required": ["offset", "data"],
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "description": "Starting byte offset in EEPROM (0–383)",
+            "minimum": 0,
+            "maximum": 383,
+            "example": 0
+          },
+          "data": {
+            "type": "string",
+            "description": "Bytes to write as a hex string",
+            "example": "AABBCCDD"
+          }
+        }
+      },
+
+      "InitValRequest": {
+        "type": "object",
+        "required": ["block", "value"],
+        "properties": {
+          "block": {
+            "type": "integer",
+            "description": "Block address to initialize as a value block",
+            "example": 5
+          },
+          "value": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Initial integer value (uint32)",
+            "example": 1000
+          }
+        }
+      },
+
+      "IncrementRequest": {
+        "type": "object",
+        "required": ["block", "value"],
+        "properties": {
+          "block": {
+            "type": "integer",
+            "description": "Block address of the value block",
+            "example": 5
+          },
+          "value": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount to add (uint32)",
+            "example": 50
+          }
+        }
+      },
+
+      "DecrementRequest": {
+        "type": "object",
+        "required": ["block", "value"],
+        "properties": {
+          "block": {
+            "type": "integer",
+            "description": "Block address of the value block",
+            "example": 5
+          },
+          "value": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount to subtract (uint32)",
+            "example": 25
+          }
+        }
+      },
+
+      "ReadValRequest": {
+        "type": "object",
+        "required": ["block"],
+        "properties": {
+          "block": {
+            "type": "integer",
+            "description": "Block address of the value block",
+            "example": 5
+          }
+        }
+      },
+
+      "ReadValData": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current value stored in the value block",
+            "example": 975
+          }
+        }
+      }
+    },
+
+    "responses": {
+      "Error": {
+        "description": "Error",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorBody" }
+          }
+        }
+      },
+      "DetailedError": {
+        "description": "Detailed diagnostic error",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/DetailedErrorBody" }
+          }
+        }
+      }
+    }
+  }
+}

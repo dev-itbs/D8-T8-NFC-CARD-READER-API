@@ -23,6 +23,35 @@
       ]
     },
     {
+      "name": "Documentation",
+      "item": [
+        {
+          "name": "Swagger UI",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/docs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "docs"]
+            }
+          }
+        },
+        {
+          "name": "OpenAPI Spec (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/docs/openapi.json",
+              "host": ["{{base_url}}"],
+              "path": ["api", "docs", "openapi.json"]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Card Operations",
       "item": [
         {
