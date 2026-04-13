@@ -61,6 +61,21 @@ type ReadValResponse struct {
 	Value uint32 `json:"value"`
 }
 
+// CardDecodeResponse is the response for decoding a Branca token
+type CardDecodeResponse struct {
+	SNRDecimal  uint32      `json:"snr_decimal"`
+	BrancaToken string      `json:"branca_token"`
+	Payload     interface{} `json:"payload"` // Decoded JSON from the Branca token
+}
+
+// CardReadDecodedResponse combines ReadAll + Branca decode in one response
+type CardReadDecodedResponse struct {
+	SNRHex      string      `json:"snr_hex"`
+	SNRDecimal  uint32      `json:"snr_decimal"`
+	BrancaToken string      `json:"branca_token"`
+	Payload     interface{} `json:"payload"` // Decoded JSON from the Branca token
+}
+
 // ErrorResponse is returned on error (wrapped in Response)
 type ErrorResponse struct {
 	Error string `json:"error"`

@@ -25,6 +25,8 @@ func NewRouter(r *reader.Reader) *chi.Mux {
 	router.Post("/api/v1/card/detect", cardHandlers.Detect)
 	router.Post("/api/v1/card/read", cardHandlers.Read)
 	router.Post("/api/v1/card/read-all", cardHandlers.ReadAll)
+	router.Post("/api/v1/card/read-decoded", cardHandlers.ReadDecoded)
+	router.Post("/api/v1/card/decode", cardHandlers.Decode)
 	router.Post("/api/v1/card/write", cardHandlers.Write)
 	router.Post("/api/v1/card/halt", cardHandlers.Halt)
 

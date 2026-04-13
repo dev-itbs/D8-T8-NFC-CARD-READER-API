@@ -81,3 +81,17 @@ type CardReadAllRequest struct {
 	Key     string `json:"key"`            // Hex string (12 chars for 6 bytes)
 	UsePass bool   `json:"use_pass"`       // If true, use dc_authentication_pass
 }
+
+// CardDecodeRequest decodes a Branca token offline using SNR-derived key
+type CardDecodeRequest struct {
+	BrancaToken string `json:"branca_token"` // The Branca-encoded token string
+	SNRDecimal  uint32 `json:"snr_decimal"`  // Card serial number (decimal) used to derive key
+}
+
+// CardReadDecodedRequest reads all blocks and decodes the Branca token in one step
+type CardReadDecodedRequest struct {
+	Mode    int    `json:"mode"`     // 0 = IDLE, 1 = ALL
+	KeyMode int    `json:"key_mode"` // 0-2 for KEY A, 4-6 for KEY B
+	Key     string `json:"key"`      // Hex string (12 chars for 6 bytes)
+	UsePass bool   `json:"use_pass"` // If true, use dc_authentication_pass
+}

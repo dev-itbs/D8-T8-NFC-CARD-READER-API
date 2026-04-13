@@ -131,6 +131,69 @@
           }
         },
         {
+          "name": "Read All Blocks",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mode\": 0, \"key_mode\": 0, \"key\": \"D3F7D3F7D3F7\", \"use_pass\": false}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/read-all",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "read-all"]
+            }
+          }
+        },
+        {
+          "name": "Read & Decode (Branca)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mode\": 0, \"key_mode\": 0, \"key\": \"D3F7D3F7D3F7\", \"use_pass\": false}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/read-decoded",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "read-decoded"]
+            }
+          }
+        },
+        {
+          "name": "Decode Branca Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"branca_token\": \"\", \"snr_decimal\": 0}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/decode",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "decode"]
+            }
+          }
+        },
+        {
           "name": "Halt Card",
           "request": {
             "method": "POST",

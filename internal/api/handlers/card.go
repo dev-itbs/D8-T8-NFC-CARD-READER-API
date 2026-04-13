@@ -1,17 +1,136 @@
 package handlers
 
 import (
+	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+
+	"github.com/hako/branca"
 
 	"github.com/dev-itbs/lto-reader-api/internal/models"
 	"github.com/dev-itbs/lto-reader-api/internal/reader"
 )
+
+// snrToBrancaKey derives a 32-byte Branca key from a card SNR decimal:
+// key = hex(MD5(string(snr_decimal)))
+func snrToBrancaKey(snr uint32) string {
+	snrStr := strconv.FormatUint(uint64(snr), 10)
+	sum := md5.Sum([]byte(snrStr))
+	return hex.EncodeToString(sum[:]) // 32 hex chars = 32 bytes
+}
+
+// extractNDEFText parses raw Mifare block data and extracts the payload of the
+// first NDEF text record ('T'). It handles the NDEF TLV wrapper (0x03 marker)
+// and strips the language-code prefix from the text payload, returning the
+// bare Branca token string.
+//
+// Layout on a Mifare Classic 1K NDEF card written by Android NFC Tools:
+//   sector 0  (blocks 0-3)  – UID/MFG + MAD (contains false 0x03 bytes)
+//   sector 1+ (blocks 4-63) – CC (E1 10 ...) followed by NDEF TLV: 03 [len] [records]
+func extractNDEFText(raw []byte) string {
+	// Start from byte 64 (skip sector 0: UID/MFG block + MAD data).
+	// Sector 0 MAD contains 0x03 bytes that look like NDEF TLV markers but aren't.
+	const startOffset = 64
+	if len(raw) < startOffset+3 {
+		return ""
+	}
+
+	for i := startOffset; i < len(raw)-2; i++ {
+		if raw[i] != 0x03 { // NDEF Message TLV type
+			continue
+		}
+
+		// Parse TLV length field (1-byte or 3-byte form).
+		var msgLen, msgStart int
+		if raw[i+1] == 0xFF {
+			if i+4 > len(raw) {
+				continue
+			}
+			msgLen = int(raw[i+2])<<8 | int(raw[i+3])
+			msgStart = i + 4
+		} else {
+			msgLen = int(raw[i+1])
+			msgStart = i + 2
+		}
+		if msgLen == 0 || msgStart+msgLen > len(raw) {
+			continue
+		}
+
+		// Walk NDEF records inside the message.
+		pos := msgStart
+		end := msgStart + msgLen
+		for pos < end {
+			if pos >= len(raw) {
+				break
+			}
+			header := raw[pos]
+			pos++
+
+			if pos >= len(raw) {
+				break
+			}
+			typeLen := int(raw[pos])
+			pos++
+
+			// Payload length: 1 byte when SR flag (bit 4) is set, 4 bytes otherwise.
+			var payloadLen int
+			if header&0x10 != 0 {
+				if pos >= len(raw) {
+					break
+				}
+				payloadLen = int(raw[pos])
+				pos++
+			} else {
+				if pos+4 > len(raw) {
+					break
+				}
+				payloadLen = int(raw[pos])<<24 | int(raw[pos+1])<<16 | int(raw[pos+2])<<8 | int(raw[pos+3])
+				pos += 4
+			}
+
+			// Skip optional ID field when IL flag (bit 3) is set.
+			if header&0x08 != 0 {
+				if pos >= len(raw) {
+					break
+				}
+				idLen := int(raw[pos])
+				pos++
+				pos += idLen
+			}
+
+			if pos+typeLen > len(raw) {
+				break
+			}
+			recordType := string(raw[pos : pos+typeLen])
+			pos += typeLen
+
+			if pos+payloadLen > len(raw) {
+				break
+			}
+			payload := raw[pos : pos+payloadLen]
+			pos += payloadLen
+
+			// Text record: strip status byte + language code, return bare text.
+			if recordType == "T" && len(payload) > 1 {
+				langLen := int(payload[0] & 0x3F) // lower 6 bits = lang code length
+				if 1+langLen >= len(payload) {
+					continue
+				}
+				text := strings.TrimRight(string(payload[1+langLen:]), "\x00")
+				if text != "" {
+					return text
+				}
+			}
+		}
+	}
+	return ""
+}
 
 // CardHandlers holds dependencies for card-related handlers
 type CardHandlers struct {
@@ -396,6 +515,237 @@ func (h *CardHandlers) Halt(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}
+
+// Decode decodes a Branca token offline given a token string + SNR decimal.
+// Key derivation: hex(MD5(string(snr_decimal))) → 32-byte Branca key.
+func (h *CardHandlers) Decode(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/decode")
+	var req models.CardDecodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
+		return
+	}
+	if req.BrancaToken == "" {
+		respondError(w, "branca_token is required", http.StatusBadRequest)
+		return
+	}
+
+	key := snrToBrancaKey(req.SNRDecimal)
+	log.Printf("[API] Decode: snr=%d key=%s", req.SNRDecimal, key)
+
+	b := branca.NewBranca(key)
+	payload, err := b.DecodeToString(req.BrancaToken)
+	if err != nil {
+		log.Printf("[API] Branca decode failed: %v", err)
+		respondWithError(w, "Branca decode failed", err.Error(), http.StatusUnprocessableEntity, false)
+		return
+	}
+
+	var parsed interface{}
+	if jsonErr := json.Unmarshal([]byte(payload), &parsed); jsonErr != nil {
+		// Payload is not JSON — return it as a plain string
+		parsed = payload
+	}
+
+	resp := models.Response{
+		Success: true,
+		Message: "Branca token decoded successfully",
+		Data: models.CardDecodeResponse{
+			SNRDecimal:  req.SNRDecimal,
+			BrancaToken: req.BrancaToken,
+			Payload:     parsed,
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// ReadDecoded reads all card blocks, extracts the Branca token, decodes it, and
+// returns the JSON payload — all in a single request.
+func (h *CardHandlers) ReadDecoded(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/read-decoded")
+	var req models.CardReadDecodedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
+		return
+	}
+
+	key, err := reader.KeyFromHex(req.Key)
+	if err != nil {
+		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Detect card
+	log.Printf("[API] ReadDecoded: detecting card (mode=%d)...", req.Mode)
+	snr, err := h.Reader.DetectCard(req.Mode)
+	if err != nil {
+		diagErr := parseDLLError(err.Error(), "dc_request")
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "no card detected") || strings.Contains(err.Error(), "no card present") {
+			statusCode = http.StatusNotFound
+			diagErr.Suggestion = "No card detected. Place card on reader."
+		}
+		respondWithDiagnosticError(w, diagErr, statusCode)
+		return
+	}
+	log.Printf("[API] Card detected: SNR=%08X (%d)", snr, snr)
+
+	// Step 2: Derive Branca key from SNR decimal (MD5 of decimal string)
+	brancaKey := snrToBrancaKey(snr)
+	log.Printf("[API] ReadDecoded: SNR decimal=%d → branca key=%s", snr, brancaKey)
+
+	// Step 3: Read all 64 blocks using a sector-based loop.
+	// For each sector, try the user-provided key first, then well-known NDEF keys:
+	//   D3F7D3F7D3F7 — NFC Forum NDEF data sectors (1-15, written by Android apps)
+	//   A0A1A2A3A4A5 — NFC Forum MAD / sector 0 key
+	//   FFFFFFFFFFFF — factory default
+	// After a failed authentication Mifare Classic deselects the card, so we
+	// re-detect before trying the next key.
+	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
+	allKeys := [][6]byte{key} // user-provided key first
+	for _, kh := range ndefKeyHexes {
+		k, _ := reader.KeyFromHex(kh)
+		allKeys = append(allKeys, k)
+	}
+
+	rawBytes := make([]byte, 0, 1024)
+	for sector := 0; sector < 16; sector++ {
+		block0 := sector * 4
+
+		// Attempt authentication using LoadKey+Authenticate (standard 2-step protocol).
+		// dc_authentication_pass returns 0 for some wrong keys (false positive), so we
+		// verify each attempt by trying an actual dc_read of the first block.
+		authenticated := false
+		var block0Data [16]byte
+
+		for keyIdx, tryKey := range allKeys {
+			log.Printf("[API] ReadDecoded: sector %d key[%d]=%X — LoadKey+Auth", sector, keyIdx, tryKey)
+
+			// dc_load_key just writes to the reader's RAM; no card interaction, no re-detect needed on failure.
+			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
+				log.Printf("[API] ReadDecoded: sector %d LoadKey failed: %v", sector, loadErr)
+				continue
+			}
+
+			// dc_authentication does the crypto challenge. On failure the card deselects.
+			if authErr := h.Reader.Authenticate(req.KeyMode, sector); authErr != nil {
+				log.Printf("[API] ReadDecoded: sector %d Authenticate failed, re-detecting: %v", sector, authErr)
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
+
+			// Confirm authentication actually worked — a wrong key can still return 0 from Authenticate.
+			data, readErr := h.Reader.ReadBlock(block0)
+			if readErr != nil {
+				log.Printf("[API] ReadDecoded: sector %d auth returned OK but read failed (%v), re-detecting", sector, readErr)
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
+
+			log.Printf("[API] ReadDecoded: sector %d authenticated + verified with key[%d]", sector, keyIdx)
+			authenticated = true
+			block0Data = data
+			break
+		}
+
+		// Sector 0 includes all 4 blocks (UID/MFG + MAD data + trailer) to keep startOffset=64 alignment.
+		// Sectors 1-15 skip the sector trailer (block 3) — it holds access keys/bits, not NDEF data,
+		// and would corrupt the Branca token bytes if included.
+		blocksToRead := 4
+		if sector > 0 {
+			blocksToRead = 3
+		}
+		sectorPad := blocksToRead * 16
+
+		if !authenticated {
+			log.Printf("[API] ReadDecoded: sector %d: all keys exhausted, padding %d zeros", sector, sectorPad)
+			rawBytes = append(rawBytes, make([]byte, sectorPad)...)
+			continue
+		}
+
+		// First block already read during auth verification
+		rawBytes = append(rawBytes, block0Data[:]...)
+
+		// Read remaining data blocks (skip trailer for sectors 1-15)
+		for blockInSector := 1; blockInSector < blocksToRead; blockInSector++ {
+			blockAddr := block0 + blockInSector
+			data, err := h.Reader.ReadBlock(blockAddr)
+			if err != nil {
+				log.Printf("[API] ReadDecoded: ReadBlock %d failed: %v", blockAddr, err)
+				rawBytes = append(rawBytes, make([]byte, 16)...)
+			} else {
+				rawBytes = append(rawBytes, data[:]...)
+			}
+		}
+	}
+	h.Reader.Halt()
+
+	// Count how many blocks had actual data (non-zero)
+	nonZeroBlocks := 0
+	for i := 0; i < len(rawBytes); i += 16 {
+		end := i + 16
+		if end > len(rawBytes) {
+			end = len(rawBytes)
+		}
+		for _, b := range rawBytes[i:end] {
+			if b != 0 {
+				nonZeroBlocks++
+				break
+			}
+		}
+	}
+	// Log first 64 bytes as hex for diagnosis
+	preview := rawBytes
+	if len(preview) > 64 {
+		preview = preview[:64]
+	}
+	log.Printf("[API] ReadDecoded: rawBytes=%d bytes, non-zero blocks=%d, first64=%X", len(rawBytes), nonZeroBlocks, preview)
+
+	// Extract Branca token from NDEF text record in raw card bytes
+	token := extractNDEFText(rawBytes)
+	if token == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":          false,
+			"error":            "No Branca token found",
+			"message":          "Could not find a base62 token in the card data",
+			"retryable":        false,
+			"blocks_read":      nonZeroBlocks,
+			"raw_hex_preview":  fmt.Sprintf("%X", preview),
+		})
+		return
+	}
+	log.Printf("[API] ReadDecoded: extracted token (len=%d): %.20s...", len(token), token)
+
+	// Step 4: Decode the Branca token
+	b := branca.NewBranca(brancaKey)
+	payload, err := b.DecodeToString(token)
+	if err != nil {
+		log.Printf("[API] ReadDecoded: Branca decode failed: %v", err)
+		respondWithError(w, "Branca decode failed", err.Error(), http.StatusUnprocessableEntity, false)
+		return
+	}
+
+	var parsed interface{}
+	if jsonErr := json.Unmarshal([]byte(payload), &parsed); jsonErr != nil {
+		parsed = payload
+	}
+
+	resp := models.Response{
+		Success: true,
+		Message: "Card read and decoded successfully",
+		Data: models.CardReadDecodedResponse{
+			SNRHex:      fmt.Sprintf("0x%08X", snr),
+			SNRDecimal:  snr,
+			BrancaToken: token,
+			Payload:     parsed,
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
 
