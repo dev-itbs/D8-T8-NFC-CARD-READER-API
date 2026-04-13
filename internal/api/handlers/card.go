@@ -132,6 +132,47 @@ func extractNDEFText(raw []byte) string {
 	return ""
 }
 
+// buildNDEFText encodes text into a raw NDEF TLV payload ready to write starting at block 5.
+// Output format: 03 [length] [NDEF text record] FE
+// The NDEF text record payload is: [status byte 0x02][lang "en"][text].
+func buildNDEFText(text string) []byte {
+	// NDEF text record payload: status(1) + lang(2) + text
+	lang := "en"
+	ndefPayload := make([]byte, 0, 1+len(lang)+len(text))
+	ndefPayload = append(ndefPayload, byte(len(lang))) // status byte: UTF-8, langLen=2 → 0x02
+	ndefPayload = append(ndefPayload, []byte(lang)...)
+	ndefPayload = append(ndefPayload, []byte(text)...)
+
+	// NDEF record: header depends on SR (short record) flag.
+	// SR=1 when payload length ≤ 255, payload length is 1 byte (header 0xD1).
+	// SR=0 when payload length > 255, payload length is 4 bytes big-endian (header 0xC1).
+	var record []byte
+	if len(ndefPayload) <= 255 {
+		record = []byte{0xD1, 0x01, byte(len(ndefPayload)), 'T'}
+	} else {
+		pLen := uint32(len(ndefPayload))
+		record = []byte{
+			0xC1, 0x01,
+			byte(pLen >> 24), byte(pLen >> 16), byte(pLen >> 8), byte(pLen),
+			'T',
+		}
+	}
+	record = append(record, ndefPayload...)
+
+	// NDEF Message TLV: type=0x03, length (1 or 3 bytes), message, terminator 0xFE
+	msgLen := len(record)
+	var tlv []byte
+	tlv = append(tlv, 0x03)
+	if msgLen <= 254 {
+		tlv = append(tlv, byte(msgLen))
+	} else {
+		tlv = append(tlv, 0xFF, byte(msgLen>>8), byte(msgLen))
+	}
+	tlv = append(tlv, record...)
+	tlv = append(tlv, 0xFE)
+	return tlv
+}
+
 // CardHandlers holds dependencies for card-related handlers
 type CardHandlers struct {
 	Reader *reader.Reader
@@ -729,20 +770,188 @@ func (h *CardHandlers) ReadDecoded(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, "Branca decode failed", err.Error(), http.StatusUnprocessableEntity, false)
 		return
 	}
+	log.Printf("[API] ReadDecoded: raw decoded payload (len=%d): %s", len(payload), payload)
 
 	var parsed interface{}
 	if jsonErr := json.Unmarshal([]byte(payload), &parsed); jsonErr != nil {
+		log.Printf("[API] ReadDecoded: payload is not JSON, returning as string: %v", jsonErr)
 		parsed = payload
 	}
 
 	resp := models.Response{
 		Success: true,
 		Message: "Card read and decoded successfully",
-		Data: models.CardReadDecodedResponse{
-			SNRHex:      fmt.Sprintf("0x%08X", snr),
-			SNRDecimal:  snr,
-			BrancaToken: token,
-			Payload:     parsed,
+		Data:    parsed,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// WriteEncoded encodes any JSON value as a Branca token (key = MD5 hex of SNR decimal)
+// and writes it to the card as an NDEF text record starting at sector 1.
+func (h *CardHandlers) WriteEncoded(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/write-encoded")
+	var req models.CardWriteEncodedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
+		return
+	}
+	if len(req.Data) == 0 || string(req.Data) == "null" {
+		respondError(w, "data field is required and must be a valid JSON value", http.StatusBadRequest)
+		return
+	}
+
+	key, err := reader.KeyFromHex(req.Key)
+	if err != nil {
+		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Detect card → get SNR
+	log.Printf("[API] WriteEncoded: detecting card (mode=%d)...", req.Mode)
+	snr, err := h.Reader.DetectCard(req.Mode)
+	if err != nil {
+		diagErr := parseDLLError(err.Error(), "dc_request")
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "no card detected") || strings.Contains(err.Error(), "no card present") {
+			statusCode = http.StatusNotFound
+			diagErr.Suggestion = "No card detected. Place card on reader."
+		}
+		respondWithDiagnosticError(w, diagErr, statusCode)
+		return
+	}
+	log.Printf("[API] WriteEncoded: card detected SNR=%08X (%d)", snr, snr)
+
+	// Derive Branca key from SNR decimal (same derivation as ReadDecoded)
+	brancaKey := snrToBrancaKey(snr)
+	log.Printf("[API] WriteEncoded: SNR decimal=%d → branca key=%s", snr, brancaKey)
+
+	// Encode JSON data as Branca token
+	b := branca.NewBranca(brancaKey)
+	token, encErr := b.EncodeToString(string(req.Data))
+	if encErr != nil {
+		log.Printf("[API] WriteEncoded: Branca encode failed: %v", encErr)
+		respondWithError(w, "Branca encode failed", encErr.Error(), http.StatusInternalServerError, false)
+		return
+	}
+	log.Printf("[API] WriteEncoded: branca token len=%d: %.30s...", len(token), token)
+
+	// Build NDEF TLV payload
+	ndefTLV := buildNDEFText(token)
+	log.Printf("[API] WriteEncoded: NDEF TLV size=%d bytes", len(ndefTLV))
+
+	// Sector 1 block 0 (block 4) = Capability Container; blocks 5,6 = NDEF data (32 bytes).
+	// Sectors 2-15: 3 data blocks each = 42 × 16 = 672 bytes. Total NDEF data: 704 bytes.
+	const maxNDEFBytes = 704
+	if len(ndefTLV) > maxNDEFBytes {
+		respondWithError(w, "Data too large",
+			fmt.Sprintf("NDEF payload is %d bytes; card capacity is %d bytes. Reduce the JSON payload size.", len(ndefTLV), maxNDEFBytes),
+			http.StatusBadRequest, false)
+		return
+	}
+
+	// Pad NDEF TLV to fill all 704 bytes (zero-fill remaining blocks)
+	ndefPadded := make([]byte, maxNDEFBytes)
+	copy(ndefPadded, ndefTLV)
+
+	// Capability Container for block 4: NDEF magic E1, version 1.0, size, read/write
+	var ccBlock [16]byte
+	ccBlock[0] = 0xE1
+	ccBlock[1] = 0x10
+	ccBlock[2] = 0x6D // 109 × 8 = 872 bytes declared capacity
+	ccBlock[3] = 0x00
+
+	// Try the user-provided key plus well-known NDEF keys (same strategy as ReadDecoded)
+	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
+	allKeys := [][6]byte{key}
+	for _, kh := range ndefKeyHexes {
+		k, _ := reader.KeyFromHex(kh)
+		allKeys = append(allKeys, k)
+	}
+
+	blocksWritten := 0
+	ndefOffset := 0
+	failedSectors := []int{}
+
+	for sector := 1; sector < 16; sector++ {
+		block0 := sector * 4
+
+		// Authenticate sector (try each key, re-detect on failure)
+		authenticated := false
+		for keyIdx, tryKey := range allKeys {
+			log.Printf("[API] WriteEncoded: sector %d key[%d] — LoadKey+Auth", sector, keyIdx)
+			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
+				log.Printf("[API] WriteEncoded: sector %d LoadKey failed: %v", sector, loadErr)
+				continue
+			}
+			if authErr := h.Reader.Authenticate(req.KeyMode, sector); authErr != nil {
+				log.Printf("[API] WriteEncoded: sector %d Auth failed, re-detecting: %v", sector, authErr)
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
+			authenticated = true
+			log.Printf("[API] WriteEncoded: sector %d authenticated with key[%d]", sector, keyIdx)
+			break
+		}
+
+		if !authenticated {
+			log.Printf("[API] WriteEncoded: sector %d all keys failed, skipping", sector)
+			failedSectors = append(failedSectors, sector)
+			// Advance offset past this sector's data blocks
+			blocksToSkip := 3
+			if sector == 1 {
+				blocksToSkip = 2 // block 4 = CC, NDEF in blocks 5,6
+			}
+			ndefOffset += blocksToSkip * 16
+			continue
+		}
+
+		// Sector 1: write CC to block 4, NDEF data to blocks 5 and 6
+		// Sectors 2-15: write NDEF data to blocks 0, 1, 2 (skip trailer block 3)
+		startBlockInSector := 0
+		if sector == 1 {
+			if writeErr := h.Reader.WriteBlock(block0, ccBlock); writeErr != nil {
+				log.Printf("[API] WriteEncoded: CC write to block %d failed: %v", block0, writeErr)
+			} else {
+				log.Printf("[API] WriteEncoded: CC written to block %d", block0)
+			}
+			startBlockInSector = 1 // NDEF starts at block 5
+		}
+
+		for blockInSector := startBlockInSector; blockInSector < 3; blockInSector++ {
+			blockAddr := block0 + blockInSector
+			var blockData [16]byte
+			if ndefOffset < len(ndefPadded) {
+				copy(blockData[:], ndefPadded[ndefOffset:])
+			}
+			ndefOffset += 16
+
+			if writeErr := h.Reader.WriteBlock(blockAddr, blockData); writeErr != nil {
+				log.Printf("[API] WriteEncoded: WriteBlock %d failed: %v", blockAddr, writeErr)
+			} else {
+				log.Printf("[API] WriteEncoded: block %d written", blockAddr)
+				blocksWritten++
+			}
+		}
+	}
+
+	h.Reader.Halt()
+
+	success := len(failedSectors) == 0
+	msg := fmt.Sprintf("Card encoded and written successfully. %d blocks written.", blocksWritten)
+	if !success {
+		msg = fmt.Sprintf("Write completed with errors. %d blocks written, failed sectors: %v", blocksWritten, failedSectors)
+	}
+
+	resp := models.Response{
+		Success: success,
+		Message: msg,
+		Data: models.CardWriteEncodedResponse{
+			SNRHex:        fmt.Sprintf("0x%08X", snr),
+			SNRDecimal:    snr,
+			BrancaToken:   token,
+			BytesWritten:  blocksWritten * 16,
+			BlocksWritten: blocksWritten,
 		},
 	}
 	w.Header().Set("Content-Type", "application/json")

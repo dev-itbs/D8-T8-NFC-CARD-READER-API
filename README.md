@@ -183,6 +183,83 @@ Write 16 bytes to a card block after authentication.
 
 ---
 
+#### Encode & Write (Branca)
+
+**POST** `/api/v1/card/write-encoded`
+
+Detects the card, derives a Branca key from the card's SNR (key = `hex(MD5(snr_decimal))`), encodes the provided JSON as a Branca token, and writes it to the card as an NDEF text record. This is the reverse of `read-decoded`.
+
+**Request:**
+```json
+{
+  "mode": 0,
+  "key_mode": 0,
+  "key": "D3F7D3F7D3F7",
+  "use_pass": true,
+  "data": {
+    "date_issued": "2026-02-23",
+    "owner_name": "Maria Beatriz Alexa Miranda",
+    "plate_number": "PEQ705",
+    "engine_number": "4M41UCAU848",
+    "chassis_number": "MMKYDJTFVFSR74",
+    "vin": "MMBJNKB40AD012345",
+    "file_number": "1901-000987654320",
+    "vehicle_details": {
+      "category": "Pickup Truck",
+      "body_type": "Pickup Truck - 4 Door",
+      "gross_weight": 2370,
+      "net_weight": 1900,
+      "max_power_kw": null,
+      "series": "012345"
+    },
+    "specifications": {
+      "color": "Red",
+      "make_brand": "Mitsubishi",
+      "year_model": 2010,
+      "fuel_type": "Diesel",
+      "classification": "Private",
+      "vehicle_type": "LCV",
+      "year_rebuilt": null,
+      "piston_displacement_cc": 2396,
+      "passenger_capacity": 5
+    },
+    "encumbrance": {
+      "encumbered_to": "BDO Unibank"
+    }
+  }
+}
+```
+
+**Parameters:**
+- `mode`: 0 = IDLE, 1 = ALL
+- `key_mode`: 0-2 for KEY A, 4-6 for KEY B
+- `key`: Hex string for 6-byte sector key (e.g., `"D3F7D3F7D3F7"` for NDEF cards)
+- `use_pass`: Authentication method (see Read endpoint)
+- `data`: Any valid JSON value to encode onto the card
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Card encoded and written successfully. 44 blocks written.",
+  "data": {
+    "snr_hex": "0xA8920A2F",
+    "snr_decimal": 2828143151,
+    "branca_token": "<encoded token>",
+    "bytes_written": 704,
+    "blocks_written": 44
+  }
+}
+```
+
+**Notes:**
+- The Branca key is derived per-card from the SNR: `hex(MD5(string(snr_decimal)))`
+- Writes the Capability Container (CC) to block 4, NDEF data to blocks 5-62 (skipping sector trailers)
+- Max payload: ~704 bytes NDEF TLV capacity on a Mifare Classic 1K card
+- Verify the write with `read-decoded` immediately after
+
+---
+
 #### Halt Card
 
 **POST** `/api/v1/card/halt`

@@ -173,6 +173,33 @@
           }
         },
         {
+          "name": "Encode & Write (Branca)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"D3F7D3F7D3F7\",\n  \"use_pass\": true,\n  \"data\": {\n    \"date_issued\": \"2026-02-23\",\n    \"owner_name\": \"Maria Beatriz Alexa Miranda\",\n    \"plate_number\": \"PEQ705\",\n    \"engine_number\": \"4M41UCAU848\",\n    \"chassis_number\": \"MMKYDJTFVFSR74\",\n    \"vin\": \"MMBJNKB40AD012345\",\n    \"file_number\": \"1901-000987654320\",\n    \"vehicle_details\": {\n      \"category\": \"Pickup Truck\",\n      \"body_type\": \"Pickup Truck - 4 Door\",\n      \"gross_weight\": 2370,\n      \"net_weight\": 1900,\n      \"max_power_kw\": null,\n      \"series\": \"012345\"\n    },\n    \"specifications\": {\n      \"color\": \"Red\",\n      \"make_brand\": \"Mitsubishi\",\n      \"year_model\": 2010,\n      \"fuel_type\": \"Diesel\",\n      \"classification\": \"Private\",\n      \"vehicle_type\": \"LCV\",\n      \"year_rebuilt\": null,\n      \"piston_displacement_cc\": 2396,\n      \"passenger_capacity\": 5\n    },\n    \"encumbrance\": {\n      \"encumbered_to\": \"BDO Unibank\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/write-encoded",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "write-encoded"]
+            },
+            "description": "Encodes any JSON as a Branca token (key = hex(MD5(snr_decimal))) and writes it to the card as an NDEF text record. Use read-decoded to verify after writing."
+          }
+        },
+        {
           "name": "Decode Branca Token",
           "request": {
             "method": "POST",

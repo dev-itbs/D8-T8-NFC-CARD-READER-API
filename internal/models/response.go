@@ -76,6 +76,15 @@ type CardReadDecodedResponse struct {
 	Payload     interface{} `json:"payload"` // Decoded JSON from the Branca token
 }
 
+// CardWriteEncodedResponse is the response for encoding JSON + writing to card
+type CardWriteEncodedResponse struct {
+	SNRHex        string `json:"snr_hex"`
+	SNRDecimal    uint32 `json:"snr_decimal"`
+	BrancaToken   string `json:"branca_token"`
+	BytesWritten  int    `json:"bytes_written"`
+	BlocksWritten int    `json:"blocks_written"`
+}
+
 // ErrorResponse is returned on error (wrapped in Response)
 type ErrorResponse struct {
 	Error string `json:"error"`

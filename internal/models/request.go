@@ -1,5 +1,7 @@
 package models
 
+import "encoding/json"
+
 // CardDetectRequest is the request for detecting a card
 type CardDetectRequest struct {
 	Mode int `json:"mode"` // 0 = IDLE, 1 = ALL
@@ -94,4 +96,13 @@ type CardReadDecodedRequest struct {
 	KeyMode int    `json:"key_mode"` // 0-2 for KEY A, 4-6 for KEY B
 	Key     string `json:"key"`      // Hex string (12 chars for 6 bytes)
 	UsePass bool   `json:"use_pass"` // If true, use dc_authentication_pass
+}
+
+// CardWriteEncodedRequest encodes any JSON value as a Branca token and writes it to the card
+type CardWriteEncodedRequest struct {
+	Mode    int             `json:"mode"`     // 0 = IDLE, 1 = ALL
+	KeyMode int             `json:"key_mode"` // 0-2 for KEY A, 4-6 for KEY B
+	Key     string          `json:"key"`      // Hex string (12 chars for 6 bytes)
+	UsePass bool            `json:"use_pass"` // If true, use dc_authentication_pass
+	Data    json.RawMessage `json:"data"`     // Any JSON value to encode into the card
 }
