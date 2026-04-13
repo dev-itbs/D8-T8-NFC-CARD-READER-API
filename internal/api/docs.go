@@ -1,3 +1,10 @@
+// Package api provides the HTTP API layer for the LTO NFC Card Reader.
+//
+// To regenerate swagger.json after adding or modifying handlers, run:
+//
+//	go generate ./internal/api/...
+//
+//go:generate swag init -g ../../../cmd/server/main.go -d ../../internal/api/handlers,../../internal/models,../../cmd/server --output . --outputTypes json
 package api
 
 import (
@@ -5,7 +12,7 @@ import (
 	"net/http"
 )
 
-//go:embed openapi.json
+//go:embed swagger.json
 var openapiSpec []byte
 
 func docsHandler(w http.ResponseWriter, r *http.Request) {

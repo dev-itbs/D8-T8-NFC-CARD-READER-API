@@ -19,7 +19,15 @@ func NewDeviceHandlers(r *reader.Reader) *DeviceHandlers {
 	return &DeviceHandlers{Reader: r}
 }
 
-// GetVersion returns the device firmware version
+// GetVersion godoc
+//
+//	@Summary		Get firmware version
+//	@Description	Returns the firmware version string of the connected D8/T8 reader
+//	@Tags			Device
+//	@Produce		json
+//	@Success		200	{object}	models.Response{data=models.VersionResponse}
+//	@Failure		500	{object}	models.Response
+//	@Router			/api/v1/device/version [get]
 func (h *DeviceHandlers) GetVersion(w http.ResponseWriter, r *http.Request) {
 	version, err := h.Reader.GetVersion()
 	if err != nil {
@@ -39,7 +47,18 @@ func (h *DeviceHandlers) GetVersion(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// Beep triggers the device buzzer
+// Beep godoc
+//
+//	@Summary		Trigger buzzer
+//	@Description	Triggers the device buzzer for the specified duration in milliseconds
+//	@Tags			Device
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.DeviceBeepRequest	true	"Beep request"
+//	@Success		200		{object}	models.Response
+//	@Failure		400		{object}	models.Response
+//	@Failure		500		{object}	models.Response
+//	@Router			/api/v1/device/beep [post]
 func (h *DeviceHandlers) Beep(w http.ResponseWriter, r *http.Request) {
 	var req models.DeviceBeepRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -67,7 +86,18 @@ func (h *DeviceHandlers) Beep(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// Reset performs an RF reset
+// Reset godoc
+//
+//	@Summary		RF field reset
+//	@Description	Resets the RF field for the specified duration in milliseconds
+//	@Tags			Device
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.DeviceResetRequest	true	"Reset request"
+//	@Success		200		{object}	models.Response
+//	@Failure		400		{object}	models.Response
+//	@Failure		500		{object}	models.Response
+//	@Router			/api/v1/device/reset [post]
 func (h *DeviceHandlers) Reset(w http.ResponseWriter, r *http.Request) {
 	var req models.DeviceResetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -90,7 +120,18 @@ func (h *DeviceHandlers) Reset(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// ReadEEPROM reads data from the device EEPROM
+// ReadEEPROM godoc
+//
+//	@Summary		Read EEPROM
+//	@Description	Reads bytes from the device EEPROM at the specified offset (offset: 0–383, length: 1–384)
+//	@Tags			Device
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.EEPROMReadRequest					true	"EEPROM read request"
+//	@Success		200		{object}	models.Response{data=models.EEPROMReadResponse}
+//	@Failure		400		{object}	models.Response
+//	@Failure		500		{object}	models.Response
+//	@Router			/api/v1/device/eeprom/read [post]
 func (h *DeviceHandlers) ReadEEPROM(w http.ResponseWriter, r *http.Request) {
 	var req models.EEPROMReadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -126,7 +167,18 @@ func (h *DeviceHandlers) ReadEEPROM(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// WriteEEPROM writes data to the device EEPROM
+// WriteEEPROM godoc
+//
+//	@Summary		Write EEPROM
+//	@Description	Writes hex-encoded bytes to the device EEPROM at the specified offset (offset: 0–383)
+//	@Tags			Device
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.EEPROMWriteRequest	true	"EEPROM write request"
+//	@Success		200		{object}	models.Response
+//	@Failure		400		{object}	models.Response
+//	@Failure		500		{object}	models.Response
+//	@Router			/api/v1/device/eeprom/write [post]
 func (h *DeviceHandlers) WriteEEPROM(w http.ResponseWriter, r *http.Request) {
 	var req models.EEPROMWriteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -160,7 +212,18 @@ func (h *DeviceHandlers) WriteEEPROM(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// InitVal initializes a value block
+// InitVal godoc
+//
+//	@Summary		Initialize value block
+//	@Description	Formats a card block as a Mifare value block with the specified initial value (block: 1–63)
+//	@Tags			Device
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.InitValRequest	true	"Init value request"
+//	@Success		200		{object}	models.Response
+//	@Failure		400		{object}	models.Response
+//	@Failure		500		{object}	models.Response
+//	@Router			/api/v1/device/value/init [post]
 func (h *DeviceHandlers) InitVal(w http.ResponseWriter, r *http.Request) {
 	var req models.InitValRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -188,7 +251,18 @@ func (h *DeviceHandlers) InitVal(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// Increment increments a value block
+// Increment godoc
+//
+//	@Summary		Increment value block
+//	@Description	Adds the given value to a Mifare value block (block: 1–63)
+//	@Tags			Device
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.IncrementRequest	true	"Increment request"
+//	@Success		200		{object}	models.Response
+//	@Failure		400		{object}	models.Response
+//	@Failure		500		{object}	models.Response
+//	@Router			/api/v1/device/value/increment [post]
 func (h *DeviceHandlers) Increment(w http.ResponseWriter, r *http.Request) {
 	var req models.IncrementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -216,7 +290,18 @@ func (h *DeviceHandlers) Increment(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// Decrement decrements a value block
+// Decrement godoc
+//
+//	@Summary		Decrement value block
+//	@Description	Subtracts the given value from a Mifare value block (block: 1–63)
+//	@Tags			Device
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.DecrementRequest	true	"Decrement request"
+//	@Success		200		{object}	models.Response
+//	@Failure		400		{object}	models.Response
+//	@Failure		500		{object}	models.Response
+//	@Router			/api/v1/device/value/decrement [post]
 func (h *DeviceHandlers) Decrement(w http.ResponseWriter, r *http.Request) {
 	var req models.DecrementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -244,7 +329,18 @@ func (h *DeviceHandlers) Decrement(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// ReadVal reads a value from a value block
+// ReadVal godoc
+//
+//	@Summary		Read value block
+//	@Description	Reads the current integer value from a Mifare value block (block: 0–63)
+//	@Tags			Device
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.ReadValRequest					true	"Read value request"
+//	@Success		200		{object}	models.Response{data=models.ReadValResponse}
+//	@Failure		400		{object}	models.Response
+//	@Failure		500		{object}	models.Response
+//	@Router			/api/v1/device/value/read [post]
 func (h *DeviceHandlers) ReadVal(w http.ResponseWriter, r *http.Request) {
 	var req models.ReadValRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

@@ -1,0 +1,1064 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "REST API for reading and writing Branca-encoded data on Mifare Classic NFC cards using D8/T8 hardware.",
+        "title": "LTO NFC Card Reader API",
+        "contact": {},
+        "version": "1.0.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/",
+    "paths": {
+        "/api/v1/card/1/read-decoded": {
+            "post": {
+                "description": "Reads all card blocks, extracts the NDEF Branca token, and decodes it using a key derived from hex(MD5(snr_decimal))",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MD5 Endpoints"
+                ],
+                "summary": "Read and decode card (MD5)",
+                "parameters": [
+                    {
+                        "description": "Read request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CardReadDecodedRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.CardReadDecodedResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/card/1/write-encoded": {
+            "post": {
+                "description": "Encodes JSON data as a Branca token using key=hex(MD5(snr_decimal)) and writes it as an NDEF text record to the card",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MD5 Endpoints"
+                ],
+                "summary": "Encode and write to card (MD5)",
+                "parameters": [
+                    {
+                        "description": "Write request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CardWriteEncodedRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.CardWriteEncodedResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/card/2/read-decoded": {
+            "post": {
+                "description": "Reads all card blocks, extracts the NDEF Branca token, and decodes it using a key derived from SHA256(snr_decimal + BRANCA_SALT)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SHA256 Endpoints"
+                ],
+                "summary": "Read and decode card (SHA256)",
+                "parameters": [
+                    {
+                        "description": "Read request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CardReadDecodedRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.CardReadDecodedResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/card/2/write-encoded": {
+            "post": {
+                "description": "Encodes JSON data as a Branca token using key=SHA256(snr_decimal+BRANCA_SALT) and writes it as an NDEF text record to the card",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SHA256 Endpoints"
+                ],
+                "summary": "Encode and write to card (SHA256)",
+                "parameters": [
+                    {
+                        "description": "Write request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CardWriteEncodedRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.CardWriteEncodedResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/card/detect": {
+            "post": {
+                "description": "Detects an NFC card in the RF field and returns its serial number",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Card Operations"
+                ],
+                "summary": "Detect NFC card",
+                "parameters": [
+                    {
+                        "description": "Detect request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CardDetectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.CardDetectResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/card/halt": {
+            "post": {
+                "description": "Deselects the card from the RF field",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Card Operations"
+                ],
+                "summary": "Halt card",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/device/beep": {
+            "post": {
+                "description": "Triggers the device buzzer for the specified duration in milliseconds",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device"
+                ],
+                "summary": "Trigger buzzer",
+                "parameters": [
+                    {
+                        "description": "Beep request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.DeviceBeepRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/device/eeprom/read": {
+            "post": {
+                "description": "Reads bytes from the device EEPROM at the specified offset (offset: 0–383, length: 1–384)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device"
+                ],
+                "summary": "Read EEPROM",
+                "parameters": [
+                    {
+                        "description": "EEPROM read request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.EEPROMReadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.EEPROMReadResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/device/eeprom/write": {
+            "post": {
+                "description": "Writes hex-encoded bytes to the device EEPROM at the specified offset (offset: 0–383)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device"
+                ],
+                "summary": "Write EEPROM",
+                "parameters": [
+                    {
+                        "description": "EEPROM write request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.EEPROMWriteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/device/reset": {
+            "post": {
+                "description": "Resets the RF field for the specified duration in milliseconds",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device"
+                ],
+                "summary": "RF field reset",
+                "parameters": [
+                    {
+                        "description": "Reset request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.DeviceResetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/device/value/decrement": {
+            "post": {
+                "description": "Subtracts the given value from a Mifare value block (block: 1–63)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device"
+                ],
+                "summary": "Decrement value block",
+                "parameters": [
+                    {
+                        "description": "Decrement request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.DecrementRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/device/value/increment": {
+            "post": {
+                "description": "Adds the given value to a Mifare value block (block: 1–63)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device"
+                ],
+                "summary": "Increment value block",
+                "parameters": [
+                    {
+                        "description": "Increment request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.IncrementRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/device/value/init": {
+            "post": {
+                "description": "Formats a card block as a Mifare value block with the specified initial value (block: 1–63)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device"
+                ],
+                "summary": "Initialize value block",
+                "parameters": [
+                    {
+                        "description": "Init value request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.InitValRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/device/value/read": {
+            "post": {
+                "description": "Reads the current integer value from a Mifare value block (block: 0–63)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device"
+                ],
+                "summary": "Read value block",
+                "parameters": [
+                    {
+                        "description": "Read value request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ReadValRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ReadValResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/device/version": {
+            "get": {
+                "description": "Returns the firmware version string of the connected D8/T8 reader",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Device"
+                ],
+                "summary": "Get firmware version",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.VersionResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Returns the health status of the API",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "models.CardDetectRequest": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "description": "0 = IDLE, 1 = ALL",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.CardDetectResponse": {
+            "type": "object",
+            "properties": {
+                "snr_decimal": {
+                    "description": "Decimal representation",
+                    "type": "integer"
+                },
+                "snr_hex": {
+                    "description": "Hex representation like \"0x1A2B3C4D\"",
+                    "type": "string"
+                }
+            }
+        },
+        "models.CardReadDecodedRequest": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "description": "Hex string (12 chars for 6 bytes)",
+                    "type": "string"
+                },
+                "key_mode": {
+                    "description": "0-2 for KEY A, 4-6 for KEY B",
+                    "type": "integer"
+                },
+                "mode": {
+                    "description": "0 = IDLE, 1 = ALL",
+                    "type": "integer"
+                },
+                "use_pass": {
+                    "description": "If true, use dc_authentication_pass",
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.CardReadDecodedResponse": {
+            "type": "object",
+            "properties": {
+                "branca_token": {
+                    "type": "string"
+                },
+                "payload": {
+                    "description": "Decoded JSON from the Branca token"
+                },
+                "snr_decimal": {
+                    "type": "integer"
+                },
+                "snr_hex": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CardWriteEncodedRequest": {
+            "type": "object"
+        },
+        "models.CardWriteEncodedResponse": {
+            "type": "object",
+            "properties": {
+                "blocks_written": {
+                    "type": "integer"
+                },
+                "branca_token": {
+                    "type": "string"
+                },
+                "bytes_written": {
+                    "type": "integer"
+                },
+                "snr_decimal": {
+                    "type": "integer"
+                },
+                "snr_hex": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.DecrementRequest": {
+            "type": "object",
+            "properties": {
+                "block": {
+                    "description": "Block address",
+                    "type": "integer"
+                },
+                "value": {
+                    "description": "Value to subtract",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.DetailedErrorResponse": {
+            "type": "object",
+            "properties": {
+                "card_type": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "integer"
+                },
+                "details": {
+                    "type": "string"
+                },
+                "documentation": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "error_code": {
+                    "type": "integer"
+                },
+                "function": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "retryable": {
+                    "type": "boolean"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "suggestion": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.DeviceBeepRequest": {
+            "type": "object",
+            "properties": {
+                "ms": {
+                    "description": "Duration in milliseconds",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.DeviceResetRequest": {
+            "type": "object",
+            "properties": {
+                "ms": {
+                    "description": "Reset duration in milliseconds",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.EEPROMReadRequest": {
+            "type": "object",
+            "properties": {
+                "length": {
+                    "description": "1-384",
+                    "type": "integer"
+                },
+                "offset": {
+                    "description": "0-383",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.EEPROMReadResponse": {
+            "type": "object",
+            "properties": {
+                "bytes": {
+                    "description": "Raw byte array",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "data": {
+                    "description": "Hex string",
+                    "type": "string"
+                }
+            }
+        },
+        "models.EEPROMWriteRequest": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "description": "Hex string",
+                    "type": "string"
+                },
+                "offset": {
+                    "description": "0-383",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.IncrementRequest": {
+            "type": "object",
+            "properties": {
+                "block": {
+                    "description": "Block address",
+                    "type": "integer"
+                },
+                "value": {
+                    "description": "Value to add",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.InitValRequest": {
+            "type": "object",
+            "properties": {
+                "block": {
+                    "description": "Block address",
+                    "type": "integer"
+                },
+                "value": {
+                    "description": "Initial value",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ReadValRequest": {
+            "type": "object",
+            "properties": {
+                "block": {
+                    "description": "Block address",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ReadValResponse": {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.Response": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.VersionResponse": {
+            "type": "object",
+            "properties": {
+                "version": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "description": "API liveness check",
+            "name": "Health"
+        },
+        {
+            "description": "Basic card detect and halt operations",
+            "name": "Card Operations"
+        },
+        {
+            "description": "Branca token read/write with MD5-derived keys (endpoint group 1)",
+            "name": "MD5 Endpoints"
+        },
+        {
+            "description": "Branca token read/write with SHA256+salt-derived keys (endpoint group 2)",
+            "name": "SHA256 Endpoints"
+        },
+        {
+            "description": "Device control, EEPROM access, and value block operations",
+            "name": "Device"
+        }
+    ]
+}

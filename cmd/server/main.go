@@ -1,3 +1,23 @@
+// @title LTO NFC Card Reader API
+// @version 1.0.0
+// @description REST API for reading and writing Branca-encoded data on Mifare Classic NFC cards using D8/T8 hardware.
+// @host localhost:8080
+// @BasePath /
+//
+// @tag.name Health
+// @tag.description API liveness check
+//
+// @tag.name Card Operations
+// @tag.description Basic card detect and halt operations
+//
+// @tag.name MD5 Endpoints
+// @tag.description Branca token read/write with MD5-derived keys (endpoint group 1)
+//
+// @tag.name SHA256 Endpoints
+// @tag.description Branca token read/write with SHA256+salt-derived keys (endpoint group 2)
+//
+// @tag.name Device
+// @tag.description Device control, EEPROM access, and value block operations
 package main
 
 import (

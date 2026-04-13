@@ -3,7 +3,6 @@ package handlers
 import (
 	"crypto/md5"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -40,8 +39,9 @@ func snrToBrancaKeySHA(snr uint32, salt string) string {
 // bare Branca token string.
 //
 // Layout on a Mifare Classic 1K NDEF card written by Android NFC Tools:
-//   sector 0  (blocks 0-3)  – UID/MFG + MAD (contains false 0x03 bytes)
-//   sector 1+ (blocks 4-63) – CC (E1 10 ...) followed by NDEF TLV: 03 [len] [records]
+//
+//	sector 0  (blocks 0-3)  – UID/MFG + MAD (contains false 0x03 bytes)
+//	sector 1+ (blocks 4-63) – CC (E1 10 ...) followed by NDEF TLV: 03 [len] [records]
 func extractNDEFText(raw []byte) string {
 	// Start from byte 64 (skip sector 0: UID/MFG block + MAD data).
 	// Sector 0 MAD contains 0x03 bytes that look like NDEF TLV markers but aren't.
@@ -193,7 +193,18 @@ func NewCardHandlers(r *reader.Reader, salt string) *CardHandlers {
 	return &CardHandlers{Reader: r, Salt: salt}
 }
 
-// Detect detects a card and returns its serial number
+// Detect godoc
+//
+//	@Summary		Detect NFC card
+//	@Description	Detects an NFC card in the RF field and returns its serial number
+//	@Tags			Card Operations
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.CardDetectRequest						true	"Detect request"
+//	@Success		200		{object}	models.Response{data=models.CardDetectResponse}
+//	@Failure		400		{object}	models.DetailedErrorResponse
+//	@Failure		500		{object}	models.DetailedErrorResponse
+//	@Router			/api/v1/card/detect [post]
 func (h *CardHandlers) Detect(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/detect")
 	var req models.CardDetectRequest
@@ -236,320 +247,15 @@ func (h *CardHandlers) Detect(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// Read reads a block from a detected and authenticated card
-func (h *CardHandlers) Read(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/read")
-	var req models.CardReadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[API] ERROR: Invalid JSON: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Validate input
-	if req.Block < 0 || req.Block > 63 {
-		log.Printf("[API] ERROR: Invalid block: %d", req.Block)
-		respondError(w, "Block must be 0-63", http.StatusBadRequest)
-		return
-	}
-
-	key, err := reader.KeyFromHex(req.Key)
-	if err != nil {
-		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Auto-detect card if not already selected (previous operation may have halted it)
-	log.Printf("[API] Auto-detecting card (mode=%d)...", req.Mode)
-	snr, err := h.Reader.DetectCard(req.Mode)
-	if err != nil {
-		log.Printf("[API] ERROR: Auto-detect failed: %v", err)
-		diagErr := parseDLLError(err.Error(), "dc_request")
-		statusCode := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "no card detected") || strings.Contains(err.Error(), "no card present") {
-			statusCode = http.StatusNotFound
-			diagErr.Suggestion = "No card detected. Place card on reader before reading."
-		}
-		respondWithDiagnosticError(w, diagErr, statusCode)
-		return
-	}
-	log.Printf("[API] Card auto-detected: SNR=%08X", snr)
-
-	// Authenticate the block
-	if req.UsePass {
-		log.Printf("[API] Using direct pass auth: mode=%d, block=%d", req.KeyMode, req.Block)
-		if err := h.Reader.AuthenticateWithPass(req.KeyMode, req.Block, key); err != nil {
-			log.Printf("[API] AuthenticateWithPass failed: %v", err)
-			diagErr := parseDLLError(err.Error(), "dc_authentication_pass")
-			diagErr.Suggestion = "Direct auth failed. Ensure key is correct and block exists."
-			respondWithDiagnosticError(w, diagErr, http.StatusInternalServerError)
-			return
-		}
-	} else {
-		log.Printf("[API] Using load_key+auth workflow: sector=%d, mode=%d, key=%s", req.Sector, req.KeyMode, req.Key)
-		if err := h.Reader.LoadKey(req.KeyMode, req.Sector, key); err != nil {
-			log.Printf("[API] LoadKey failed: %v", err)
-			diagErr := parseDLLError(err.Error(), "dc_load_key")
-			diagErr.Suggestion = fmt.Sprintf("LoadKey failed for sector %d. Key may be incorrect.", req.Sector)
-			respondWithDiagnosticError(w, diagErr, http.StatusInternalServerError)
-			return
-		}
-		if err := h.Reader.Authenticate(req.KeyMode, req.Sector); err != nil {
-			log.Printf("[API] Authenticate failed: %v", err)
-			diagErr := parseDLLError(err.Error(), "dc_authentication")
-			diagErr.Suggestion = fmt.Sprintf("Auth failed for sector %d with key_mode %d. Try: (1) key_mode 0 for KEY A or 4 for KEY B, (2) verify key is correct (default: FFFFFFFFFFFF for factory blank cards), (3) ensure sector exists (0-15).", req.Sector, req.KeyMode)
-			respondWithDiagnosticError(w, diagErr, http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// Read the block
-	data, err := h.Reader.ReadBlock(req.Block)
-	if err != nil {
-		diagErr := parseDLLError(err.Error(), "dc_read")
-		respondWithDiagnosticError(w, diagErr, http.StatusInternalServerError)
-		return
-	}
-
-	// Halt the card
-	if err := h.Reader.Halt(); err != nil {
-		// Log but don't fail the response
-		fmt.Printf("Warning: Halt failed: %v\n", err)
-	}
-
-	resp := models.Response{
-		Success: true,
-		Message: fmt.Sprintf("Block %d read successfully. Workflow: DETECT → READ/WRITE → [REPEAT]. Next: write data, read next block, or run another operation.", req.Block),
-		Data: models.CardReadResponse{
-			Data:      reader.DataToHex(data),
-			DataBytes: data[:],
-		},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
-}
-
-// Write writes a block to a detected and authenticated card
-func (h *CardHandlers) Write(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/write")
-	var req models.CardWriteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[API] ERROR: Invalid JSON: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Validate input
-	if req.Block < 0 || req.Block > 63 {
-		log.Printf("[API] ERROR: Invalid block: %d", req.Block)
-		respondError(w, "Block must be 0-63", http.StatusBadRequest)
-		return
-	}
-
-	key, err := reader.KeyFromHex(req.Key)
-	if err != nil {
-		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	data, err := reader.DataFromHex(req.Data)
-	if err != nil {
-		respondError(w, "Invalid data: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Auto-detect card if not already selected (previous operation may have halted it)
-	log.Printf("[API] Auto-detecting card (mode=%d)...", req.Mode)
-	snr, err := h.Reader.DetectCard(req.Mode)
-	if err != nil {
-		log.Printf("[API] ERROR: Auto-detect failed: %v", err)
-		diagErr := parseDLLError(err.Error(), "dc_request")
-		statusCode := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "no card detected") || strings.Contains(err.Error(), "no card present") {
-			statusCode = http.StatusNotFound
-			diagErr.Suggestion = "No card detected. Place card on reader before writing."
-		}
-		respondWithDiagnosticError(w, diagErr, statusCode)
-		return
-	}
-	log.Printf("[API] Card auto-detected: SNR=%08X", snr)
-
-	// Authenticate the block
-	if req.UsePass {
-		log.Printf("[API] Using direct pass auth: mode=%d, block=%d", req.KeyMode, req.Block)
-		if err := h.Reader.AuthenticateWithPass(req.KeyMode, req.Block, key); err != nil {
-			log.Printf("[API] AuthenticateWithPass failed: %v", err)
-			diagErr := parseDLLError(err.Error(), "dc_authentication_pass")
-			diagErr.Suggestion = "Direct auth failed. Ensure key is correct and block exists."
-			respondWithDiagnosticError(w, diagErr, http.StatusInternalServerError)
-			return
-		}
-	} else {
-		log.Printf("[API] Using load_key+auth workflow: sector=%d, mode=%d, key=%s", req.Sector, req.KeyMode, req.Key)
-		if err := h.Reader.LoadKey(req.KeyMode, req.Sector, key); err != nil {
-			log.Printf("[API] LoadKey failed: %v", err)
-			diagErr := parseDLLError(err.Error(), "dc_load_key")
-			diagErr.Suggestion = fmt.Sprintf("LoadKey failed for sector %d. Key may be incorrect.", req.Sector)
-			respondWithDiagnosticError(w, diagErr, http.StatusInternalServerError)
-			return
-		}
-		if err := h.Reader.Authenticate(req.KeyMode, req.Sector); err != nil {
-			log.Printf("[API] Authenticate failed: %v", err)
-			diagErr := parseDLLError(err.Error(), "dc_authentication")
-			diagErr.Suggestion = fmt.Sprintf(
-				"WORKFLOW: DETECT → AUTH → WRITE. Auth failed for sector %d (key_mode=%d).\n"+
-					"Fixes: (1) Verify key is correct (default: FFFFFFFFFFFF); (2) Try key_mode 4 instead of 0 (KEY B vs KEY A); (3) Ensure sector exists (0-15).",
-				req.Sector, req.KeyMode)
-			respondWithDiagnosticError(w, diagErr, http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// Write the block
-	log.Printf("[API] Writing block %d", req.Block)
-	if err := h.Reader.WriteBlock(req.Block, data); err != nil {
-		log.Printf("[API] WriteBlock failed: %v", err)
-		diagErr := parseDLLError(err.Error(), "dc_write")
-		blockInSector := req.Block % 4
-		diagErr.Suggestion = fmt.Sprintf(
-			"WORKFLOW: DETECT → AUTH → WRITE.\nWrite failed for block %d (block_in_sector=%d). Block 3 in each sector is sector trailer (read-only). Try blocks 0-2.",
-			req.Block, blockInSector)
-		respondWithDiagnosticError(w, diagErr, http.StatusInternalServerError)
-		return
-	}
-
-	// Halt the card
-	if err := h.Reader.Halt(); err != nil {
-		// Log but don't fail the response
-		fmt.Printf("Warning: Halt failed: %v\n", err)
-	}
-
-	resp := models.Response{
-		Success: true,
-		Message: fmt.Sprintf("Block %d written successfully. Workflow: DETECT → AUTH → WRITE. Next: read to verify, write another block, or repeat.", req.Block),
-		Data:    models.CardWriteResponse{},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
-}
-
-// ReadAll reads all 64 blocks from the card and concatenates them
-func (h *CardHandlers) ReadAll(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/read-all")
-	var req models.CardReadAllRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[API] ERROR: Invalid JSON: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	key, err := reader.KeyFromHex(req.Key)
-	if err != nil {
-		log.Printf("[API] ERROR: Invalid key: %v", err)
-		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Auto-detect card
-	log.Printf("[API] Auto-detecting card (mode=%d)...", req.Mode)
-	snr, err := h.Reader.DetectCard(req.Mode)
-	if err != nil {
-		log.Printf("[API] ERROR: Auto-detect failed: %v", err)
-		diagErr := parseDLLError(err.Error(), "dc_request")
-		statusCode := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "no card detected") || strings.Contains(err.Error(), "no card present") {
-			statusCode = http.StatusNotFound
-			diagErr.Suggestion = "WORKFLOW: DETECT → READ-ALL.\nNo card detected. Place card on reader before reading all blocks."
-		}
-		respondWithDiagnosticError(w, diagErr, statusCode)
-		return
-	}
-	log.Printf("[API] Card auto-detected: SNR=%08X", snr)
-
-	// Read all 64 blocks
-	log.Printf("[API] Reading all 64 blocks...")
-	fullDataHex := ""
-	blockMap := make(map[string]string)
-	failedBlocks := []int{}
-
-	for block := 0; block < 64; block++ {
-		// Re-authenticate for each sector (every 4 blocks = 1 sector)
-		if block%4 == 0 {
-			sector := block / 4
-			log.Printf("[API] Authenticating sector %d...", sector)
-
-			if req.UsePass {
-				if err := h.Reader.AuthenticateWithPass(req.KeyMode, block, key); err != nil {
-					log.Printf("[API] AuthenticateWithPass failed for block %d: %v", block, err)
-					failedBlocks = append(failedBlocks, block)
-					continue
-				}
-			} else {
-				if err := h.Reader.LoadKey(req.KeyMode, sector, key); err != nil {
-					log.Printf("[API] LoadKey failed for sector %d: %v", sector, err)
-					failedBlocks = append(failedBlocks, block)
-					continue
-				}
-				if err := h.Reader.Authenticate(req.KeyMode, sector); err != nil {
-					log.Printf("[API] Authenticate failed for sector %d: %v", sector, err)
-					failedBlocks = append(failedBlocks, block)
-					continue
-				}
-			}
-		}
-
-		// Read block
-		data, err := h.Reader.ReadBlock(block)
-		if err != nil {
-			log.Printf("[API] ReadBlock failed for block %d: %v", block, err)
-			failedBlocks = append(failedBlocks, block)
-			blockMap[fmt.Sprintf("%d", block)] = "ERROR"
-			continue
-		}
-
-		hexData := reader.DataToHex(data)
-		blockMap[fmt.Sprintf("%d", block)] = hexData
-		fullDataHex += hexData
-
-		if block%16 == 15 {
-			log.Printf("[API] Read blocks %d-%d", block-15, block)
-		}
-	}
-
-	// Halt the card
-	if err := h.Reader.Halt(); err != nil {
-		log.Printf("Warning: Halt failed: %v", err)
-	}
-
-	// Convert to base64
-	fullDataBytes, _ := hex.DecodeString(fullDataHex)
-	fullDataBase64 := base64.StdEncoding.EncodeToString(fullDataBytes)
-
-	log.Printf("[API] ReadAll complete: %d blocks read, %d blocks failed", 64-len(failedBlocks), len(failedBlocks))
-
-	resp := models.Response{
-		Success: len(failedBlocks) == 0,
-		Message: fmt.Sprintf("Read all blocks. Total: %d bytes. Failed blocks: %d", len(fullDataBytes), len(failedBlocks)),
-		Data: models.CardReadAllResponse{
-			SNRHex:         fmt.Sprintf("0x%08X", snr),
-			SNRDecimal:     snr,
-			TotalBytes:     len(fullDataBytes),
-			FullData:       fullDataHex,
-			FullDataBase64: fullDataBase64,
-			BlockMap:       blockMap,
-		},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
-}
-
-// Halt halts the card
+// Halt godoc
+//
+//	@Summary		Halt card
+//	@Description	Deselects the card from the RF field
+//	@Tags			Card Operations
+//	@Produce		json
+//	@Success		200	{object}	models.Response
+//	@Failure		500	{object}	models.DetailedErrorResponse
+//	@Router			/api/v1/card/halt [post]
 func (h *CardHandlers) Halt(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/halt")
 	if err := h.Reader.Halt(); err != nil {
@@ -569,53 +275,18 @@ func (h *CardHandlers) Halt(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// DecodeMD5 decodes a Branca token offline given a token string + SNR decimal.
-// Key derivation: hex(MD5(string(snr_decimal))) → 32-byte Branca key.
-func (h *CardHandlers) DecodeMD5(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/decode-md5")
-	var req models.CardDecodeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
-		return
-	}
-	if req.BrancaToken == "" {
-		respondError(w, "branca_token is required", http.StatusBadRequest)
-		return
-	}
-
-	key := snrToBrancaKey(req.SNRDecimal)
-	log.Printf("[API] Decode: snr=%d key=%s", req.SNRDecimal, key)
-
-	b := branca.NewBranca(key)
-	payload, err := b.DecodeToString(req.BrancaToken)
-	if err != nil {
-		log.Printf("[API] Branca decode failed: %v", err)
-		respondWithError(w, "Branca decode failed", err.Error(), http.StatusUnprocessableEntity, false)
-		return
-	}
-
-	var parsed interface{}
-	if jsonErr := json.Unmarshal([]byte(payload), &parsed); jsonErr != nil {
-		// Payload is not JSON — return it as a plain string
-		parsed = payload
-	}
-
-	resp := models.Response{
-		Success: true,
-		Message: "Branca token decoded successfully",
-		Data: models.CardDecodeResponse{
-			SNRDecimal:  req.SNRDecimal,
-			BrancaToken: req.BrancaToken,
-			Payload:     parsed,
-		},
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
-}
-
-// ReadDecodedMD5 reads all card blocks, extracts the Branca token, decodes it, and
-// returns the JSON payload — all in a single request.
-// Key derivation: hex(MD5(string(snr_decimal))) → 32-byte Branca key.
+// ReadDecodedMD5 godoc
+//
+//	@Summary		Read and decode card (MD5)
+//	@Description	Reads all card blocks, extracts the NDEF Branca token, and decodes it using a key derived from hex(MD5(snr_decimal))
+//	@Tags			MD5 Endpoints
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.CardReadDecodedRequest						true	"Read request"
+//	@Success		200		{object}	models.Response{data=models.CardReadDecodedResponse}
+//	@Failure		400		{object}	models.DetailedErrorResponse
+//	@Failure		500		{object}	models.DetailedErrorResponse
+//	@Router			/api/v1/card/1/read-decoded [post]
 func (h *CardHandlers) ReadDecodedMD5(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/read-decoded-md5")
 	var req models.CardReadDecodedRequest
@@ -762,12 +433,12 @@ func (h *CardHandlers) ReadDecodedMD5(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success":          false,
-			"error":            "No Branca token found",
-			"message":          "Could not find a base62 token in the card data",
-			"retryable":        false,
-			"blocks_read":      nonZeroBlocks,
-			"raw_hex_preview":  fmt.Sprintf("%X", preview),
+			"success":         false,
+			"error":           "No Branca token found",
+			"message":         "Could not find a base62 token in the card data",
+			"retryable":       false,
+			"blocks_read":     nonZeroBlocks,
+			"raw_hex_preview": fmt.Sprintf("%X", preview),
 		})
 		return
 	}
@@ -798,8 +469,18 @@ func (h *CardHandlers) ReadDecodedMD5(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// WriteEncodedMD5 encodes any JSON value as a Branca token (key = hex(MD5(snr_decimal)))
-// and writes it to the card as an NDEF text record starting at sector 1.
+// WriteEncodedMD5 godoc
+//
+//	@Summary		Encode and write to card (MD5)
+//	@Description	Encodes JSON data as a Branca token using key=hex(MD5(snr_decimal)) and writes it as an NDEF text record to the card
+//	@Tags			MD5 Endpoints
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.CardWriteEncodedRequest						true	"Write request"
+//	@Success		200		{object}	models.Response{data=models.CardWriteEncodedResponse}
+//	@Failure		400		{object}	models.DetailedErrorResponse
+//	@Failure		500		{object}	models.DetailedErrorResponse
+//	@Router			/api/v1/card/1/write-encoded [post]
 func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/write-encoded-md5")
 	var req models.CardWriteEncodedRequest
@@ -969,53 +650,18 @@ func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// DecodeSHA decodes a Branca token offline given a token string + SNR decimal.
-// Key derivation: SHA256(snr_decimal + BRANCA_SALT) → 32-byte Branca key.
-func (h *CardHandlers) DecodeSHA(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/decode-sha")
-	var req models.CardDecodeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
-		return
-	}
-	if req.BrancaToken == "" {
-		respondError(w, "branca_token is required", http.StatusBadRequest)
-		return
-	}
-
-	key := snrToBrancaKeySHA(req.SNRDecimal, h.Salt)
-	log.Printf("[API] DecodeSHA: snr=%d key derived via SHA256+salt", req.SNRDecimal)
-
-	b := branca.NewBranca(key)
-	payload, err := b.DecodeToString(req.BrancaToken)
-	if err != nil {
-		log.Printf("[API] DecodeSHA: Branca decode failed: %v", err)
-		respondWithError(w, "Branca decode failed", err.Error(), http.StatusUnprocessableEntity, false)
-		return
-	}
-
-	var parsed interface{}
-	if jsonErr := json.Unmarshal([]byte(payload), &parsed); jsonErr != nil {
-		// Payload is not JSON — return it as a plain string
-		parsed = payload
-	}
-
-	resp := models.Response{
-		Success: true,
-		Message: "Branca token decoded successfully",
-		Data: models.CardDecodeResponse{
-			SNRDecimal:  req.SNRDecimal,
-			BrancaToken: req.BrancaToken,
-			Payload:     parsed,
-		},
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
-}
-
-// ReadDecodedSHA reads all card blocks, extracts the Branca token, decodes it, and
-// returns the JSON payload — all in a single request.
-// Key derivation: SHA256(snr_decimal + BRANCA_SALT) → 32-byte Branca key.
+// ReadDecodedSHA godoc
+//
+//	@Summary		Read and decode card (SHA256)
+//	@Description	Reads all card blocks, extracts the NDEF Branca token, and decodes it using a key derived from SHA256(snr_decimal + BRANCA_SALT)
+//	@Tags			SHA256 Endpoints
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.CardReadDecodedRequest						true	"Read request"
+//	@Success		200		{object}	models.Response{data=models.CardReadDecodedResponse}
+//	@Failure		400		{object}	models.DetailedErrorResponse
+//	@Failure		500		{object}	models.DetailedErrorResponse
+//	@Router			/api/v1/card/2/read-decoded [post]
 func (h *CardHandlers) ReadDecodedSHA(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/read-decoded-sha")
 	var req models.CardReadDecodedRequest
@@ -1176,8 +822,18 @@ func (h *CardHandlers) ReadDecodedSHA(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// WriteEncodedSHA encodes any JSON value as a Branca token (key = SHA256(snr_decimal + BRANCA_SALT))
-// and writes it to the card as an NDEF text record starting at sector 1.
+// WriteEncodedSHA godoc
+//
+//	@Summary		Encode and write to card (SHA256)
+//	@Description	Encodes JSON data as a Branca token using key=SHA256(snr_decimal+BRANCA_SALT) and writes it as an NDEF text record to the card
+//	@Tags			SHA256 Endpoints
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.CardWriteEncodedRequest						true	"Write request"
+//	@Success		200		{object}	models.Response{data=models.CardWriteEncodedResponse}
+//	@Failure		400		{object}	models.DetailedErrorResponse
+//	@Failure		500		{object}	models.DetailedErrorResponse
+//	@Router			/api/v1/card/2/write-encoded [post]
 func (h *CardHandlers) WriteEncodedSHA(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/write-encoded-sha")
 	var req models.CardWriteEncodedRequest
@@ -1354,11 +1010,11 @@ func respondWithError(w http.ResponseWriter, title string, message string, statu
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":    false,
-		"error":      title,
-		"message":    message,
-		"code":       statusCode,
-		"retryable":  retryable,
+		"success":   false,
+		"error":     title,
+		"message":   message,
+		"code":      statusCode,
+		"retryable": retryable,
 	})
 }
 
@@ -1384,15 +1040,15 @@ func respondWithDiagnosticError(w http.ResponseWriter, diagErr *reader.Diagnosti
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":         false,
-		"error":           diagErr.Message,
-		"error_code":      diagErr.Code,
-		"function":        diagErr.Function,
-		"suggestion":      diagErr.Suggestion,
-		"details":         diagErr.Details,
-		"card_type":       diagErr.CardType,
-		"retryable":       diagErr.Retryable,
-		"documentation":   diagErr.Documentation,
-		"code":            statusCode,
+		"success":       false,
+		"error":         diagErr.Message,
+		"error_code":    diagErr.Code,
+		"function":      diagErr.Function,
+		"suggestion":    diagErr.Suggestion,
+		"details":       diagErr.Details,
+		"card_type":     diagErr.CardType,
+		"retryable":     diagErr.Retryable,
+		"documentation": diagErr.Documentation,
+		"code":          statusCode,
 	})
 }

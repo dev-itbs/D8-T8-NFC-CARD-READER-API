@@ -26,8 +26,14 @@ A Go REST API for reading and writing contactless smart cards using the D8/T8 ca
 ```bash
 cd D:\PROJECTS\LTO\READER-API
 go mod download
-go build ./cmd/server
+go build -o server.exe ./cmd/server
 ```
+
+> **Note — 32-bit build required**: The D8/T8 SDK DLL (`dc_sdk.dll`) is a 32-bit library. Build with `GOARCH=386` to avoid DLL incompatibility errors:
+>
+> ```powershell
+> $env:GOARCH="386"; go build -o server.exe ./cmd/server
+> ```
 
 ### 2. Prepare DLL
 
@@ -65,14 +71,62 @@ Set via environment variables:
 
 ## API Documentation
 
-The server ships an interactive Swagger UI built from an embedded OpenAPI 3.0 spec — no external tools needed.
+The server ships an interactive Swagger UI. The spec (`internal/api/swagger.json`) is auto-generated from handler annotations — it is never edited by hand.
 
 | URL | Description |
 |-----|-------------|
 | `http://localhost:8080/api/docs` | Swagger UI (open in browser) |
-| `http://localhost:8080/api/docs/openapi.json` | Raw OpenAPI 3.0 JSON spec |
+| `http://localhost:8080/api/docs/openapi.json` | Raw OpenAPI JSON spec |
 
 The Swagger UI lets you read every endpoint's request/response schema and try requests directly from the browser. The spec file can also be imported into Postman, Insomnia, or any OpenAPI-compatible tool.
+
+### Updating the Swagger Docs
+
+The spec is generated from `swag` annotations on each handler. After adding or modifying an endpoint, regenerate with:
+
+```bash
+# Install swag (one-time)
+go install github.com/swaggo/swag/cmd/swag@latest
+
+# Regenerate swagger.json
+go generate ./internal/api/...
+```
+
+Then rebuild the binary — the updated spec is embedded automatically.
+
+#### Adding a new endpoint
+
+1. Add the route in `internal/api/router.go` under the appropriate comment group
+2. Write the handler with a swag annotation block, using the matching `@Tags` value:
+
+```go
+// MyNewHandler godoc
+//
+//  @Summary     Brief one-line description
+//  @Description Longer description (optional)
+//  @Tags        Card Operations          ← must match a comment group in router.go
+//  @Accept      json
+//  @Produce     json
+//  @Param       request body models.MyRequest true "Request body"
+//  @Success     200 {object} models.Response{data=models.MyResponse}
+//  @Failure     400 {object} models.DetailedErrorResponse
+//  @Failure     500 {object} models.DetailedErrorResponse
+//  @Router      /api/v1/card/something [post]
+func (h *CardHandlers) MyNewHandler(w http.ResponseWriter, r *http.Request) {
+```
+
+3. Run `go generate ./internal/api/...`
+4. Rebuild — the new endpoint appears in Swagger UI
+
+#### Available tags (match router.go comment groups)
+
+| Tag | Router comment | Endpoints |
+|-----|----------------|-----------|
+| `Health` | `// Health check` | `/health` |
+| `Card Operations` | `// Card Operations` | detect, halt |
+| `MD5 Endpoints` | `// MD5 Endpoints` | group 1 read/write |
+| `SHA256 Endpoints` | `// SHA256 Endpoints` | group 2 read/write |
+| `Device` | `// Device operations` | version, beep, reset, eeprom, value blocks |
 
 ---
 
@@ -689,8 +743,8 @@ D:\PROJECTS\LTO\READER-API\
 │   │   └── reader.go            # Reader service wrapper
 │   ├── api/
 │   │   ├── router.go            # Chi router configuration
-│   │   ├── docs.go              # Swagger UI + OpenAPI spec handlers
-│   │   ├── openapi.json         # OpenAPI 3.0 spec (embedded into binary)
+│   │   ├── docs.go              # Swagger UI handler + //go:generate directive
+│   │   ├── swagger.json         # Auto-generated OpenAPI spec (run: go generate ./internal/api/...)
 │   │   └── handlers/
 │   │       ├── health.go        # Health check handler
 │   │       ├── card.go          # Card operation handlers

@@ -5,7 +5,14 @@ import (
 	"net/http"
 )
 
-// HealthHandler returns the health status of the API
+// HealthHandler godoc
+//
+//	@Summary		Health check
+//	@Description	Returns the health status of the API
+//	@Tags			Health
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}
+//	@Router			/health [get]
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
