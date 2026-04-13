@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -23,6 +24,14 @@ func snrToBrancaKey(snr uint32) string {
 	snrStr := strconv.FormatUint(uint64(snr), 10)
 	sum := md5.Sum([]byte(snrStr))
 	return hex.EncodeToString(sum[:]) // 32 hex chars = 32 bytes
+}
+
+// snrToBrancaKeySHA derives a 32-byte Branca key using SHA256(snr_decimal + salt).
+// SHA256 produces exactly 32 bytes, used directly as the XChaCha20-Poly1305 key.
+func snrToBrancaKeySHA(snr uint32, salt string) string {
+	snrStr := strconv.FormatUint(uint64(snr), 10)
+	sum := sha256.Sum256([]byte(snrStr + salt))
+	return string(sum[:]) // 32 raw bytes
 }
 
 // extractNDEFText parses raw Mifare block data and extracts the payload of the
@@ -176,11 +185,12 @@ func buildNDEFText(text string) []byte {
 // CardHandlers holds dependencies for card-related handlers
 type CardHandlers struct {
 	Reader *reader.Reader
+	Salt   string // salt for SHA-based Branca key derivation (from BRANCA_SALT env)
 }
 
 // NewCardHandlers creates a new CardHandlers instance
-func NewCardHandlers(r *reader.Reader) *CardHandlers {
-	return &CardHandlers{Reader: r}
+func NewCardHandlers(r *reader.Reader, salt string) *CardHandlers {
+	return &CardHandlers{Reader: r, Salt: salt}
 }
 
 // Detect detects a card and returns its serial number
@@ -559,10 +569,10 @@ func (h *CardHandlers) Halt(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// Decode decodes a Branca token offline given a token string + SNR decimal.
+// DecodeMD5 decodes a Branca token offline given a token string + SNR decimal.
 // Key derivation: hex(MD5(string(snr_decimal))) → 32-byte Branca key.
-func (h *CardHandlers) Decode(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/decode")
+func (h *CardHandlers) DecodeMD5(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/decode-md5")
 	var req models.CardDecodeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
@@ -603,10 +613,11 @@ func (h *CardHandlers) Decode(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// ReadDecoded reads all card blocks, extracts the Branca token, decodes it, and
+// ReadDecodedMD5 reads all card blocks, extracts the Branca token, decodes it, and
 // returns the JSON payload — all in a single request.
-func (h *CardHandlers) ReadDecoded(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/read-decoded")
+// Key derivation: hex(MD5(string(snr_decimal))) → 32-byte Branca key.
+func (h *CardHandlers) ReadDecodedMD5(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/read-decoded-md5")
 	var req models.CardReadDecodedRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
@@ -787,10 +798,10 @@ func (h *CardHandlers) ReadDecoded(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// WriteEncoded encodes any JSON value as a Branca token (key = MD5 hex of SNR decimal)
+// WriteEncodedMD5 encodes any JSON value as a Branca token (key = hex(MD5(snr_decimal)))
 // and writes it to the card as an NDEF text record starting at sector 1.
-func (h *CardHandlers) WriteEncoded(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/write-encoded")
+func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/write-encoded-md5")
 	var req models.CardWriteEncodedRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
@@ -930,6 +941,375 @@ func (h *CardHandlers) WriteEncoded(w http.ResponseWriter, r *http.Request) {
 				log.Printf("[API] WriteEncoded: WriteBlock %d failed: %v", blockAddr, writeErr)
 			} else {
 				log.Printf("[API] WriteEncoded: block %d written", blockAddr)
+				blocksWritten++
+			}
+		}
+	}
+
+	h.Reader.Halt()
+
+	success := len(failedSectors) == 0
+	msg := fmt.Sprintf("Card encoded and written successfully. %d blocks written.", blocksWritten)
+	if !success {
+		msg = fmt.Sprintf("Write completed with errors. %d blocks written, failed sectors: %v", blocksWritten, failedSectors)
+	}
+
+	resp := models.Response{
+		Success: success,
+		Message: msg,
+		Data: models.CardWriteEncodedResponse{
+			SNRHex:        fmt.Sprintf("0x%08X", snr),
+			SNRDecimal:    snr,
+			BrancaToken:   token,
+			BytesWritten:  blocksWritten * 16,
+			BlocksWritten: blocksWritten,
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// DecodeSHA decodes a Branca token offline given a token string + SNR decimal.
+// Key derivation: SHA256(snr_decimal + BRANCA_SALT) → 32-byte Branca key.
+func (h *CardHandlers) DecodeSHA(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/decode-sha")
+	var req models.CardDecodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
+		return
+	}
+	if req.BrancaToken == "" {
+		respondError(w, "branca_token is required", http.StatusBadRequest)
+		return
+	}
+
+	key := snrToBrancaKeySHA(req.SNRDecimal, h.Salt)
+	log.Printf("[API] DecodeSHA: snr=%d key derived via SHA256+salt", req.SNRDecimal)
+
+	b := branca.NewBranca(key)
+	payload, err := b.DecodeToString(req.BrancaToken)
+	if err != nil {
+		log.Printf("[API] DecodeSHA: Branca decode failed: %v", err)
+		respondWithError(w, "Branca decode failed", err.Error(), http.StatusUnprocessableEntity, false)
+		return
+	}
+
+	var parsed interface{}
+	if jsonErr := json.Unmarshal([]byte(payload), &parsed); jsonErr != nil {
+		// Payload is not JSON — return it as a plain string
+		parsed = payload
+	}
+
+	resp := models.Response{
+		Success: true,
+		Message: "Branca token decoded successfully",
+		Data: models.CardDecodeResponse{
+			SNRDecimal:  req.SNRDecimal,
+			BrancaToken: req.BrancaToken,
+			Payload:     parsed,
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// ReadDecodedSHA reads all card blocks, extracts the Branca token, decodes it, and
+// returns the JSON payload — all in a single request.
+// Key derivation: SHA256(snr_decimal + BRANCA_SALT) → 32-byte Branca key.
+func (h *CardHandlers) ReadDecodedSHA(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/read-decoded-sha")
+	var req models.CardReadDecodedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
+		return
+	}
+
+	key, err := reader.KeyFromHex(req.Key)
+	if err != nil {
+		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Detect card
+	log.Printf("[API] ReadDecodedSHA: detecting card (mode=%d)...", req.Mode)
+	snr, err := h.Reader.DetectCard(req.Mode)
+	if err != nil {
+		diagErr := parseDLLError(err.Error(), "dc_request")
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "no card detected") || strings.Contains(err.Error(), "no card present") {
+			statusCode = http.StatusNotFound
+			diagErr.Suggestion = "No card detected. Place card on reader."
+		}
+		respondWithDiagnosticError(w, diagErr, statusCode)
+		return
+	}
+	log.Printf("[API] Card detected: SNR=%08X (%d)", snr, snr)
+
+	// Derive Branca key from SNR decimal using SHA256 + salt
+	brancaKey := snrToBrancaKeySHA(snr, h.Salt)
+	log.Printf("[API] ReadDecodedSHA: SNR decimal=%d → branca key derived via SHA256+salt", snr)
+
+	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
+	allKeys := [][6]byte{key}
+	for _, kh := range ndefKeyHexes {
+		k, _ := reader.KeyFromHex(kh)
+		allKeys = append(allKeys, k)
+	}
+
+	rawBytes := make([]byte, 0, 1024)
+	for sector := 0; sector < 16; sector++ {
+		block0 := sector * 4
+
+		authenticated := false
+		var block0Data [16]byte
+
+		for keyIdx, tryKey := range allKeys {
+			log.Printf("[API] ReadDecodedSHA: sector %d key[%d]=%X — LoadKey+Auth", sector, keyIdx, tryKey)
+
+			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
+				log.Printf("[API] ReadDecodedSHA: sector %d LoadKey failed: %v", sector, loadErr)
+				continue
+			}
+
+			if authErr := h.Reader.Authenticate(req.KeyMode, sector); authErr != nil {
+				log.Printf("[API] ReadDecodedSHA: sector %d Authenticate failed, re-detecting: %v", sector, authErr)
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
+
+			data, readErr := h.Reader.ReadBlock(block0)
+			if readErr != nil {
+				log.Printf("[API] ReadDecodedSHA: sector %d auth returned OK but read failed (%v), re-detecting", sector, readErr)
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
+
+			log.Printf("[API] ReadDecodedSHA: sector %d authenticated + verified with key[%d]", sector, keyIdx)
+			authenticated = true
+			block0Data = data
+			break
+		}
+
+		blocksToRead := 4
+		if sector > 0 {
+			blocksToRead = 3
+		}
+		sectorPad := blocksToRead * 16
+
+		if !authenticated {
+			log.Printf("[API] ReadDecodedSHA: sector %d: all keys exhausted, padding %d zeros", sector, sectorPad)
+			rawBytes = append(rawBytes, make([]byte, sectorPad)...)
+			continue
+		}
+
+		rawBytes = append(rawBytes, block0Data[:]...)
+
+		for blockInSector := 1; blockInSector < blocksToRead; blockInSector++ {
+			blockAddr := block0 + blockInSector
+			data, err := h.Reader.ReadBlock(blockAddr)
+			if err != nil {
+				log.Printf("[API] ReadDecodedSHA: ReadBlock %d failed: %v", blockAddr, err)
+				rawBytes = append(rawBytes, make([]byte, 16)...)
+			} else {
+				rawBytes = append(rawBytes, data[:]...)
+			}
+		}
+	}
+	h.Reader.Halt()
+
+	nonZeroBlocks := 0
+	for i := 0; i < len(rawBytes); i += 16 {
+		end := i + 16
+		if end > len(rawBytes) {
+			end = len(rawBytes)
+		}
+		for _, b := range rawBytes[i:end] {
+			if b != 0 {
+				nonZeroBlocks++
+				break
+			}
+		}
+	}
+	preview := rawBytes
+	if len(preview) > 64 {
+		preview = preview[:64]
+	}
+	log.Printf("[API] ReadDecodedSHA: rawBytes=%d bytes, non-zero blocks=%d, first64=%X", len(rawBytes), nonZeroBlocks, preview)
+
+	token := extractNDEFText(rawBytes)
+	if token == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":         false,
+			"error":           "No Branca token found",
+			"message":         "Could not find a base62 token in the card data",
+			"retryable":       false,
+			"blocks_read":     nonZeroBlocks,
+			"raw_hex_preview": fmt.Sprintf("%X", preview),
+		})
+		return
+	}
+	log.Printf("[API] ReadDecodedSHA: extracted token (len=%d): %.20s...", len(token), token)
+
+	b := branca.NewBranca(brancaKey)
+	payload, err := b.DecodeToString(token)
+	if err != nil {
+		log.Printf("[API] ReadDecodedSHA: Branca decode failed: %v", err)
+		respondWithError(w, "Branca decode failed", err.Error(), http.StatusUnprocessableEntity, false)
+		return
+	}
+	log.Printf("[API] ReadDecodedSHA: raw decoded payload (len=%d): %s", len(payload), payload)
+
+	var parsed interface{}
+	if jsonErr := json.Unmarshal([]byte(payload), &parsed); jsonErr != nil {
+		log.Printf("[API] ReadDecodedSHA: payload is not JSON, returning as string: %v", jsonErr)
+		parsed = payload
+	}
+
+	resp := models.Response{
+		Success: true,
+		Message: "Card read and decoded successfully",
+		Data:    parsed,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// WriteEncodedSHA encodes any JSON value as a Branca token (key = SHA256(snr_decimal + BRANCA_SALT))
+// and writes it to the card as an NDEF text record starting at sector 1.
+func (h *CardHandlers) WriteEncodedSHA(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/write-encoded-sha")
+	var req models.CardWriteEncodedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
+		return
+	}
+	if len(req.Data) == 0 || string(req.Data) == "null" {
+		respondError(w, "data field is required and must be a valid JSON value", http.StatusBadRequest)
+		return
+	}
+
+	key, err := reader.KeyFromHex(req.Key)
+	if err != nil {
+		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Detect card → get SNR
+	log.Printf("[API] WriteEncodedSHA: detecting card (mode=%d)...", req.Mode)
+	snr, err := h.Reader.DetectCard(req.Mode)
+	if err != nil {
+		diagErr := parseDLLError(err.Error(), "dc_request")
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "no card detected") || strings.Contains(err.Error(), "no card present") {
+			statusCode = http.StatusNotFound
+			diagErr.Suggestion = "No card detected. Place card on reader."
+		}
+		respondWithDiagnosticError(w, diagErr, statusCode)
+		return
+	}
+	log.Printf("[API] WriteEncodedSHA: card detected SNR=%08X (%d)", snr, snr)
+
+	// Derive Branca key from SNR decimal using SHA256 + salt
+	brancaKey := snrToBrancaKeySHA(snr, h.Salt)
+	log.Printf("[API] WriteEncodedSHA: SNR decimal=%d → branca key derived via SHA256+salt", snr)
+
+	// Encode JSON data as Branca token
+	b := branca.NewBranca(brancaKey)
+	token, encErr := b.EncodeToString(string(req.Data))
+	if encErr != nil {
+		log.Printf("[API] WriteEncodedSHA: Branca encode failed: %v", encErr)
+		respondWithError(w, "Branca encode failed", encErr.Error(), http.StatusInternalServerError, false)
+		return
+	}
+	log.Printf("[API] WriteEncodedSHA: branca token len=%d: %.30s...", len(token), token)
+
+	// Build NDEF TLV payload
+	ndefTLV := buildNDEFText(token)
+	log.Printf("[API] WriteEncodedSHA: NDEF TLV size=%d bytes", len(ndefTLV))
+
+	const maxNDEFBytes = 704
+	if len(ndefTLV) > maxNDEFBytes {
+		respondWithError(w, "Data too large",
+			fmt.Sprintf("NDEF payload is %d bytes; card capacity is %d bytes. Reduce the JSON payload size.", len(ndefTLV), maxNDEFBytes),
+			http.StatusBadRequest, false)
+		return
+	}
+
+	ndefPadded := make([]byte, maxNDEFBytes)
+	copy(ndefPadded, ndefTLV)
+
+	var ccBlock [16]byte
+	ccBlock[0] = 0xE1
+	ccBlock[1] = 0x10
+	ccBlock[2] = 0x6D
+	ccBlock[3] = 0x00
+
+	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
+	allKeys := [][6]byte{key}
+	for _, kh := range ndefKeyHexes {
+		k, _ := reader.KeyFromHex(kh)
+		allKeys = append(allKeys, k)
+	}
+
+	blocksWritten := 0
+	ndefOffset := 0
+	failedSectors := []int{}
+
+	for sector := 1; sector < 16; sector++ {
+		block0 := sector * 4
+
+		authenticated := false
+		for keyIdx, tryKey := range allKeys {
+			log.Printf("[API] WriteEncodedSHA: sector %d key[%d] — LoadKey+Auth", sector, keyIdx)
+			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
+				log.Printf("[API] WriteEncodedSHA: sector %d LoadKey failed: %v", sector, loadErr)
+				continue
+			}
+			if authErr := h.Reader.Authenticate(req.KeyMode, sector); authErr != nil {
+				log.Printf("[API] WriteEncodedSHA: sector %d Auth failed, re-detecting: %v", sector, authErr)
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
+			authenticated = true
+			log.Printf("[API] WriteEncodedSHA: sector %d authenticated with key[%d]", sector, keyIdx)
+			break
+		}
+
+		if !authenticated {
+			log.Printf("[API] WriteEncodedSHA: sector %d all keys failed, skipping", sector)
+			failedSectors = append(failedSectors, sector)
+			blocksToSkip := 3
+			if sector == 1 {
+				blocksToSkip = 2
+			}
+			ndefOffset += blocksToSkip * 16
+			continue
+		}
+
+		startBlockInSector := 0
+		if sector == 1 {
+			if writeErr := h.Reader.WriteBlock(block0, ccBlock); writeErr != nil {
+				log.Printf("[API] WriteEncodedSHA: CC write to block %d failed: %v", block0, writeErr)
+			} else {
+				log.Printf("[API] WriteEncodedSHA: CC written to block %d", block0)
+			}
+			startBlockInSector = 1
+		}
+
+		for blockInSector := startBlockInSector; blockInSector < 3; blockInSector++ {
+			blockAddr := block0 + blockInSector
+			var blockData [16]byte
+			if ndefOffset < len(ndefPadded) {
+				copy(blockData[:], ndefPadded[ndefOffset:])
+			}
+			ndefOffset += 16
+
+			if writeErr := h.Reader.WriteBlock(blockAddr, blockData); writeErr != nil {
+				log.Printf("[API] WriteEncodedSHA: WriteBlock %d failed: %v", blockAddr, writeErr)
+			} else {
+				log.Printf("[API] WriteEncodedSHA: block %d written", blockAddr)
 				blocksWritten++
 			}
 		}

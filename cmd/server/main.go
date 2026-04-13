@@ -46,7 +46,7 @@ func main() {
 	log.Println("Card reader initialized successfully")
 
 	// Create router
-	router := api.NewRouter(r)
+	router := api.NewRouter(r, cfg.BrancaSalt)
 
 	// Create HTTP server
 	server := &http.Server{

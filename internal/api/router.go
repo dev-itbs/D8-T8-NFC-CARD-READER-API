@@ -9,7 +9,7 @@ import (
 )
 
 // NewRouter creates and configures the chi router with all routes
-func NewRouter(r *reader.Reader) *chi.Mux {
+func NewRouter(r *reader.Reader, salt string) *chi.Mux {
 	router := chi.NewRouter()
 
 	// Middleware
@@ -21,14 +21,19 @@ func NewRouter(r *reader.Reader) *chi.Mux {
 	router.Get("/health", handlers.HealthHandler)
 
 	// Card operations
-	cardHandlers := handlers.NewCardHandlers(r)
+	cardHandlers := handlers.NewCardHandlers(r, salt)
 	router.Post("/api/v1/card/detect", cardHandlers.Detect)
 	router.Post("/api/v1/card/read", cardHandlers.Read)
 	router.Post("/api/v1/card/read-all", cardHandlers.ReadAll)
-	router.Post("/api/v1/card/read-decoded", cardHandlers.ReadDecoded)
-	router.Post("/api/v1/card/decode", cardHandlers.Decode)
+	// MD5-keyed Branca endpoints (key = hex(MD5(snr_decimal)))
+	router.Post("/api/v1/card/read-decoded-md5", cardHandlers.ReadDecodedMD5)
+	router.Post("/api/v1/card/decode-md5", cardHandlers.DecodeMD5)
+	router.Post("/api/v1/card/write-encoded-md5", cardHandlers.WriteEncodedMD5)
+	// SHA256+salt-keyed Branca endpoints (key = SHA256(snr_decimal + BRANCA_SALT))
+	router.Post("/api/v1/card/read-decoded-sha", cardHandlers.ReadDecodedSHA)
+	router.Post("/api/v1/card/decode-sha", cardHandlers.DecodeSHA)
+	router.Post("/api/v1/card/write-encoded-sha", cardHandlers.WriteEncodedSHA)
 	router.Post("/api/v1/card/write", cardHandlers.Write)
-	router.Post("/api/v1/card/write-encoded", cardHandlers.WriteEncoded)
 	router.Post("/api/v1/card/halt", cardHandlers.Halt)
 
 	// Device operations

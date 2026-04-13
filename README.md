@@ -60,6 +60,7 @@ Set via environment variables:
 | `SERVER_ADDR` | `:8080` | HTTP server bind address |
 | `DLL_NAME` | `dc_sdk.dll` | Path to the DC SDK DLL |
 | `GRACEFUL_WAIT` | `5` | Graceful shutdown timeout (seconds) |
+| `BRANCA_SALT` | `""` | Salt used for SHA256-based Branca key derivation (`-sha` endpoints) |
 
 ## API Endpoints
 
@@ -183,11 +184,39 @@ Write 16 bytes to a card block after authentication.
 
 ---
 
-#### Encode & Write (Branca)
+#### Read & Decode — MD5 (Branca)
 
-**POST** `/api/v1/card/write-encoded`
+**POST** `/api/v1/card/read-decoded-md5`
 
-Detects the card, derives a Branca key from the card's SNR (key = `hex(MD5(snr_decimal))`), encodes the provided JSON as a Branca token, and writes it to the card as an NDEF text record. This is the reverse of `read-decoded`.
+Reads all card blocks, extracts the NDEF Branca token, and decodes it in one request.  
+Key derivation: `hex(MD5(snr_decimal))`
+
+**Request:**
+```json
+{
+  "mode": 0,
+  "key_mode": 0,
+  "key": "D3F7D3F7D3F7",
+  "use_pass": false
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Card read and decoded successfully",
+  "data": { "<decoded JSON payload>" }
+}
+```
+
+---
+
+#### Encode & Write — MD5 (Branca)
+
+**POST** `/api/v1/card/write-encoded-md5`
+
+Detects the card, derives a Branca key from the SNR (`hex(MD5(snr_decimal))`), encodes the JSON as a Branca token, and writes it to the card as an NDEF text record.
 
 **Request:**
 ```json
@@ -230,13 +259,6 @@ Detects the card, derives a Branca key from the card's SNR (key = `hex(MD5(snr_d
 }
 ```
 
-**Parameters:**
-- `mode`: 0 = IDLE, 1 = ALL
-- `key_mode`: 0-2 for KEY A, 4-6 for KEY B
-- `key`: Hex string for 6-byte sector key (e.g., `"D3F7D3F7D3F7"` for NDEF cards)
-- `use_pass`: Authentication method (see Read endpoint)
-- `data`: Any valid JSON value to encode onto the card
-
 **Response:**
 ```json
 {
@@ -253,10 +275,96 @@ Detects the card, derives a Branca key from the card's SNR (key = `hex(MD5(snr_d
 ```
 
 **Notes:**
-- The Branca key is derived per-card from the SNR: `hex(MD5(string(snr_decimal)))`
-- Writes the Capability Container (CC) to block 4, NDEF data to blocks 5-62 (skipping sector trailers)
-- Max payload: ~704 bytes NDEF TLV capacity on a Mifare Classic 1K card
-- Verify the write with `read-decoded` immediately after
+- Key per-card: `hex(MD5(string(snr_decimal)))`
+- Max payload: ~704 bytes on a Mifare Classic 1K card
+- Verify with `read-decoded-md5` after writing
+
+---
+
+#### Decode Branca Token — MD5
+
+**POST** `/api/v1/card/decode-md5`
+
+Offline decode a Branca token without touching the card.  
+Key derivation: `hex(MD5(snr_decimal))`
+
+**Request:**
+```json
+{
+  "branca_token": "<token string>",
+  "snr_decimal": 2828143151
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Branca token decoded successfully",
+  "data": {
+    "snr_decimal": 2828143151,
+    "branca_token": "<token string>",
+    "payload": { "<decoded JSON>" }
+  }
+}
+```
+
+---
+
+#### Read & Decode — SHA256+Salt (Branca)
+
+**POST** `/api/v1/card/read-decoded-sha`
+
+Same as `read-decoded-md5` but uses a stronger key derived with SHA256 and the server-side salt.  
+Key derivation: `SHA256(snr_decimal + BRANCA_SALT)` → 32 raw bytes
+
+**Request:**
+```json
+{
+  "mode": 0,
+  "key_mode": 0,
+  "key": "D3F7D3F7D3F7",
+  "use_pass": false
+}
+```
+
+**Response:** Same shape as `read-decoded-md5`.
+
+---
+
+#### Encode & Write — SHA256+Salt (Branca)
+
+**POST** `/api/v1/card/write-encoded-sha`
+
+Same as `write-encoded-md5` but uses SHA256+salt key derivation. Requires `BRANCA_SALT` to be set in the environment — cards written with this endpoint can only be decoded by a server with the same salt.
+
+**Request:** Same shape as `write-encoded-md5`.
+
+**Response:** Same shape as `write-encoded-md5`.
+
+**Notes:**
+- Key per-card: `SHA256(string(snr_decimal) + BRANCA_SALT)`
+- The salt never leaves the server; cards are unreadable without it
+- Verify with `read-decoded-sha` after writing
+
+---
+
+#### Decode Branca Token — SHA256+Salt
+
+**POST** `/api/v1/card/decode-sha`
+
+Offline decode a Branca token encoded with the SHA256+salt key.  
+Key derivation: `SHA256(snr_decimal + BRANCA_SALT)`
+
+**Request:**
+```json
+{
+  "branca_token": "<token string>",
+  "snr_decimal": 2828143151
+}
+```
+
+**Response:** Same shape as `decode-md5`.
 
 ---
 
