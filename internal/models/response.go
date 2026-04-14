@@ -85,6 +85,19 @@ type CardWriteEncodedResponse struct {
 	BlocksWritten int    `json:"blocks_written"`
 }
 
+// CardWriteEncodedLockedResponse is the response for encoding JSON + writing + locking the card.
+// SectorsLocked counts how many of the 15 data sectors had their keys successfully replaced.
+// Locked is true only when all 15 sectors were locked (SectorsLocked == 15).
+type CardWriteEncodedLockedResponse struct {
+	SNRHex        string `json:"snr_hex"`
+	SNRDecimal    uint32 `json:"snr_decimal"`
+	BrancaToken   string `json:"branca_token"`
+	BytesWritten  int    `json:"bytes_written"`
+	BlocksWritten int    `json:"blocks_written"`
+	SectorsLocked int    `json:"sectors_locked"`
+	Locked        bool   `json:"locked"`
+}
+
 // ErrorResponse is returned on error (wrapped in Response)
 type ErrorResponse struct {
 	Error string `json:"error"`
