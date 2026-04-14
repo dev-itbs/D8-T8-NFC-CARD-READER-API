@@ -193,8 +193,7 @@ Read 16 bytes from a card block after authentication.
   "sector": 1,
   "block": 4,
   "key_mode": 0,
-  "key": "FFFFFFFFFFFF",
-  "use_pass": false
+  "key": "FFFFFFFFFFFF"
 }
 ```
 
@@ -204,7 +203,6 @@ Read 16 bytes from a card block after authentication.
 - `block`: Block address (0-63)
 - `key_mode`: 0-2 for KEY A, 4-6 for KEY B
 - `key`: Hex string for 6-byte key (e.g., "FFFFFFFFFFFF")
-- `use_pass`: If true, uses `dc_authentication_pass` (no separate load_key)
 
 **Response:**
 ```json
@@ -233,13 +231,12 @@ Write 16 bytes to a card block after authentication.
   "block": 4,
   "key_mode": 0,
   "key": "FFFFFFFFFFFF",
-  "data": "000102030405060708090A0B0C0D0E0F",
-  "use_pass": false
+  "data": "000102030405060708090A0B0C0D0E0F"
 }
 ```
 
 **Parameters:**
-- `mode`, `sector`, `block`, `key_mode`, `key`, `use_pass`: See Read endpoint
+- `mode`, `sector`, `block`, `key_mode`, `key`: See Read endpoint
 - `data`: Hex string for 16-byte data (32 characters)
 
 **Response:**
@@ -264,8 +261,7 @@ Key derivation: `hex(MD5(snr_decimal))`
 {
   "mode": 0,
   "key_mode": 0,
-  "key": "D3F7D3F7D3F7",
-  "use_pass": false
+  "key": "D3F7D3F7D3F7"
 }
 ```
 
@@ -292,7 +288,6 @@ Detects the card, derives a Branca key from the SNR (`hex(MD5(snr_decimal))`), e
   "mode": 0,
   "key_mode": 0,
   "key": "D3F7D3F7D3F7",
-  "use_pass": true,
   "data": {
     "date_issued": "2026-02-23",
     "owner_name": "Maria Beatriz Alexa Miranda",
@@ -391,8 +386,7 @@ Key derivation: `SHA256(snr_decimal + BRANCA_SALT)` → 32 raw bytes
 {
   "mode": 0,
   "key_mode": 0,
-  "key": "D3F7D3F7D3F7",
-  "use_pass": false
+  "key": "D3F7D3F7D3F7"
 }
 ```
 
@@ -705,8 +699,7 @@ curl -X POST http://localhost:8080/api/v1/card/read \
     "sector": 1,
     "block": 4,
     "key_mode": 0,
-    "key": "FFFFFFFFFFFF",
-    "use_pass": false
+    "key": "FFFFFFFFFFFF"
   }'
 
 # Write a block

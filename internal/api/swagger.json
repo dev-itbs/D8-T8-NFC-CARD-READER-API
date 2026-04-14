@@ -817,11 +817,6 @@
                     "description": "0 = IDLE, 1 = ALL",
                     "type": "integer",
                     "example": 0
-                },
-                "use_pass": {
-                    "description": "If true, use dc_authentication_pass",
-                    "type": "boolean",
-                    "example": false
                 }
             }
         },
@@ -863,11 +858,6 @@
                     "description": "0 = IDLE, 1 = ALL",
                     "type": "integer",
                     "example": 0
-                },
-                "use_pass": {
-                    "description": "If true, use dc_authentication_pass",
-                    "type": "boolean",
-                    "example": false
                 }
             }
         },

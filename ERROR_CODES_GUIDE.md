@@ -127,8 +127,7 @@ curl -X POST http://localhost:8080/api/v1/card/read \
     "sector": 0,
     "block": 1,
     "key_mode": 0,
-    "key": "FFFFFFFFFFFF",
-    "use_pass": false
+    "key": "FFFFFFFFFFFF"
   }'
 
 # Solution 2: Try KEY B (mode 4)
@@ -137,14 +136,7 @@ curl -X POST http://localhost:8080/api/v1/card/read \
   "key": "FFFFFFFFFFFF"
 }
 
-# Solution 3: Use direct authentication (one step)
-{
-  "use_pass": true,
-  "key_mode": 0,
-  "key": "FFFFFFFFFFFF"
-}
-
-# Solution 4: If card uses custom key, provide it
+# Solution 3: If card uses custom key, provide it
 {
   "key": "A1A2A3A4A5A6"  ← Your card's actual key
 }
@@ -436,8 +428,7 @@ curl -X POST http://localhost:8080/api/v1/card/read \
     "sector": 0,
     "block": 1,
     "key_mode": 0,
-    "key": "FFFFFFFFFFFF",
-    "use_pass": false
+    "key": "FFFFFFFFFFFF"
   }'
 
 # Expected response:

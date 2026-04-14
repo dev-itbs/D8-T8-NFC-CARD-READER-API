@@ -14,7 +14,6 @@ type CardReadRequest struct {
 	Block    int    `json:"block"`          // 0-63
 	KeyMode  int    `json:"key_mode"`       // 0-2 for KEY A, 4-6 for KEY B
 	Key      string `json:"key"`            // Hex string (12 chars for 6 bytes)
-	UsePass  bool   `json:"use_pass"`       // If true, use dc_authentication_pass instead of load_key+auth
 }
 
 // CardWriteRequest is the request for writing a card block
@@ -25,7 +24,6 @@ type CardWriteRequest struct {
 	KeyMode int    `json:"key_mode"`       // 0-2 for KEY A, 4-6 for KEY B
 	Key     string `json:"key"`            // Hex string (12 chars for 6 bytes)
 	Data    string `json:"data"`           // Hex string (32 chars for 16 bytes)
-	UsePass bool   `json:"use_pass"`       // If true, use dc_authentication_pass
 }
 
 // CardHaltRequest is the request for halting a card
@@ -81,7 +79,6 @@ type CardReadAllRequest struct {
 	Mode    int    `json:"mode"`           // 0 = IDLE, 1 = ALL
 	KeyMode int    `json:"key_mode"`       // 0-2 for KEY A, 4-6 for KEY B
 	Key     string `json:"key"`            // Hex string (12 chars for 6 bytes)
-	UsePass bool   `json:"use_pass"`       // If true, use dc_authentication_pass
 }
 
 // CardDecodeRequest decodes a Branca token offline using SNR-derived key
@@ -95,7 +92,6 @@ type CardReadDecodedRequest struct {
 	Mode    int    `json:"mode" example:"0"`             // 0 = IDLE, 1 = ALL
 	KeyMode int    `json:"key_mode" example:"0"`         // 0-2 for KEY A, 4-6 for KEY B
 	Key     string `json:"key" example:"FFFFFFFFFFFF"`   // Hex string (12 chars for 6 bytes)
-	UsePass bool   `json:"use_pass" example:"false"`     // If true, use dc_authentication_pass
 }
 
 // CardWriteEncodedRequest encodes any JSON value as a Branca token and writes it to the card
@@ -103,6 +99,5 @@ type CardWriteEncodedRequest struct {
 	Mode    int             `json:"mode" example:"0"`             // 0 = IDLE, 1 = ALL
 	KeyMode int             `json:"key_mode" example:"0"`         // 0-2 for KEY A, 4-6 for KEY B
 	Key     string          `json:"key" example:"FFFFFFFFFFFF"`   // Hex string (12 chars for 6 bytes)
-	UsePass bool            `json:"use_pass" example:"false"`     // If true, use dc_authentication_pass
 	Data    json.RawMessage `json:"data" swaggertype:"object"`    // Any JSON value to encode into the card
 }

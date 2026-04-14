@@ -114,8 +114,7 @@ Equivalent to: `dc_load_key()` + `dc_authentication()` + `dc_read()`
   "sector": 0,
   "block": 1,
   "key_mode": 0,
-  "key": "FFFFFFFFFFFF",
-  "use_pass": false
+  "key": "FFFFFFFFFFFF"
 }
 ```
 
@@ -128,9 +127,6 @@ Equivalent to: `dc_load_key()` + `dc_authentication()` + `dc_read()`
   - `4-6` = KEY B variants
 - `key`: 12-character hex string (6 bytes)
   - Default for most cards: `FFFFFFFFFFFF`
-- `use_pass`: 
-  - `false` = use `dc_load_key()` + `dc_authentication()` (standard)
-  - `true` = use `dc_authentication_pass()` (single call)
 
 **Response** (200 OK):
 ```json
@@ -181,8 +177,7 @@ Equivalent to: `dc_load_key()` + `dc_authentication()` + `dc_write()`
   "block": 1,
   "key_mode": 0,
   "key": "FFFFFFFFFFFF",
-  "data": "48656C6C6F576F726C6421000000000",
-  "use_pass": false
+  "data": "48656C6C6F576F726C6421000000000"
 }
 ```
 
@@ -558,8 +553,7 @@ Equivalent to: `dc_readval(icdev, addr, &value)`
      "sector": 0,
      "block": 1,
      "key_mode": 0,
-     "key": "FFFFFFFFFFFF",
-     "use_pass": false
+     "key": "FFFFFFFFFFFF"
    }
    ```
    → Get 16 bytes of data
@@ -587,8 +581,7 @@ Equivalent to: `dc_readval(icdev, addr, &value)`
      "block": 1,
      "key_mode": 0,
      "key": "FFFFFFFFFFFF",
-     "data": "48656C6C6F576F726C6421000000000",
-     "use_pass": false
+     "data": "48656C6C6F576F726C6421000000000"
    }
    ```
 

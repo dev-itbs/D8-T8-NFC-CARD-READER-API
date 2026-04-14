@@ -165,7 +165,7 @@ Response:
 ```bash
 curl -X POST http://localhost:8080/api/v1/card/read ^
   -H "Content-Type: application/json" ^
-  -d "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\", \"use_pass\": false}"
+  -d "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\"}"
 ```
 
 **Expected (200 OK):**
@@ -220,7 +220,7 @@ Padded to 32 chars: `48656C6C6F576F726C6421000000000`
 ```bash
 curl -X POST http://localhost:8080/api/v1/card/write ^
   -H "Content-Type: application/json" ^
-  -d "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\", \"data\": \"48656C6C6F576F726C6421000000000\", \"use_pass\": false}"
+  -d "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\", \"data\": \"48656C6C6F576F726C6421000000000\"}"
 ```
 
 **Expected (200 OK):**

@@ -126,8 +126,7 @@ curl -X POST http://localhost:8080/api/v1/card/read \
     "sector": 0,
     "block": 1,
     "key_mode": 0,
-    "key": "FFFFFFFFFFFF",
-    "use_pass": false
+    "key": "FFFFFFFFFFFF"
   }'
 ```
 
@@ -152,8 +151,7 @@ curl -X POST http://localhost:8080/api/v1/card/write \
     "block": 1,
     "key_mode": 0,
     "key": "FFFFFFFFFFFF",
-    "data": "48656C6C6F576F726C6421000000000",
-    "use_pass": false
+    "data": "48656C6C6F576F726C6421000000000"
   }'
 ```
 

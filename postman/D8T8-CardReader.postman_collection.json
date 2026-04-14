@@ -76,253 +76,6 @@
           }
         },
         {
-          "name": "Read Card Block",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\", \"use_pass\": false}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/read",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "read"]
-            }
-          }
-        },
-        {
-          "name": "Read Card Block (with password)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\", \"use_pass\": true}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/read",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "read"]
-            }
-          }
-        },
-        {
-          "name": "Write Card Block",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\", \"data\": \"000102030405060708090A0B0C0D0E0F\", \"use_pass\": false}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/write",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "write"]
-            }
-          }
-        },
-        {
-          "name": "Write Card Block (with password)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"mode\": 0, \"sector\": 0, \"block\": 1, \"key_mode\": 0, \"key\": \"FFFFFFFFFFFF\", \"data\": \"000102030405060708090A0B0C0D0E0F\", \"use_pass\": true}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/write",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "write"]
-            }
-          }
-        },
-        {
-          "name": "Read All Blocks",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"mode\": 0, \"key_mode\": 0, \"key\": \"D3F7D3F7D3F7\", \"use_pass\": false}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/read-all",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "read-all"]
-            }
-          }
-        },
-        {
-          "name": "Read & Decode — MD5 (Branca)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"mode\": 0, \"key_mode\": 0, \"key\": \"D3F7D3F7D3F7\", \"use_pass\": false}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/read-decoded-md5",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "read-decoded-md5"]
-            },
-            "description": "Reads card and decodes Branca token. Key = hex(MD5(snr_decimal))."
-          }
-        },
-        {
-          "name": "Encode & Write — MD5 (Branca)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"D3F7D3F7D3F7\",\n  \"use_pass\": true,\n  \"data\": {\n    \"date_issued\": \"2026-02-23\",\n    \"owner_name\": \"Maria Beatriz Alexa Miranda\",\n    \"plate_number\": \"PEQ705\",\n    \"engine_number\": \"4M41UCAU848\",\n    \"chassis_number\": \"MMKYDJTFVFSR74\",\n    \"vin\": \"MMBJNKB40AD012345\",\n    \"file_number\": \"1901-000987654320\",\n    \"vehicle_details\": {\n      \"category\": \"Pickup Truck\",\n      \"body_type\": \"Pickup Truck - 4 Door\",\n      \"gross_weight\": 2370,\n      \"net_weight\": 1900,\n      \"max_power_kw\": null,\n      \"series\": \"012345\"\n    },\n    \"specifications\": {\n      \"color\": \"Red\",\n      \"make_brand\": \"Mitsubishi\",\n      \"year_model\": 2010,\n      \"fuel_type\": \"Diesel\",\n      \"classification\": \"Private\",\n      \"vehicle_type\": \"LCV\",\n      \"year_rebuilt\": null,\n      \"piston_displacement_cc\": 2396,\n      \"passenger_capacity\": 5\n    },\n    \"encumbrance\": {\n      \"encumbered_to\": \"BDO Unibank\"\n    }\n  }\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/write-encoded-md5",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "write-encoded-md5"]
-            },
-            "description": "Encodes any JSON as a Branca token (key = hex(MD5(snr_decimal))) and writes it to the card as an NDEF text record. Use read-decoded-md5 to verify after writing."
-          }
-        },
-        {
-          "name": "Decode Branca Token — MD5",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"branca_token\": \"\", \"snr_decimal\": 0}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/decode-md5",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "decode-md5"]
-            },
-            "description": "Offline decode a Branca token. Key = hex(MD5(snr_decimal))."
-          }
-        },
-        {
-          "name": "Read & Decode — SHA256+Salt (Branca)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"mode\": 0, \"key_mode\": 0, \"key\": \"D3F7D3F7D3F7\", \"use_pass\": false}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/read-decoded-sha",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "read-decoded-sha"]
-            },
-            "description": "Reads card and decodes Branca token. Key = SHA256(snr_decimal + BRANCA_SALT)."
-          }
-        },
-        {
-          "name": "Encode & Write — SHA256+Salt (Branca)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"D3F7D3F7D3F7\",\n  \"use_pass\": true,\n  \"data\": {\n    \"date_issued\": \"2026-02-23\",\n    \"owner_name\": \"Maria Beatriz Alexa Miranda\",\n    \"plate_number\": \"PEQ705\",\n    \"engine_number\": \"4M41UCAU848\",\n    \"chassis_number\": \"MMKYDJTFVFSR74\",\n    \"vin\": \"MMBJNKB40AD012345\",\n    \"file_number\": \"1901-000987654320\",\n    \"vehicle_details\": {\n      \"category\": \"Pickup Truck\",\n      \"body_type\": \"Pickup Truck - 4 Door\",\n      \"gross_weight\": 2370,\n      \"net_weight\": 1900,\n      \"max_power_kw\": null,\n      \"series\": \"012345\"\n    },\n    \"specifications\": {\n      \"color\": \"Red\",\n      \"make_brand\": \"Mitsubishi\",\n      \"year_model\": 2010,\n      \"fuel_type\": \"Diesel\",\n      \"classification\": \"Private\",\n      \"vehicle_type\": \"LCV\",\n      \"year_rebuilt\": null,\n      \"piston_displacement_cc\": 2396,\n      \"passenger_capacity\": 5\n    },\n    \"encumbrance\": {\n      \"encumbered_to\": \"BDO Unibank\"\n    }\n  }\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/write-encoded-sha",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "write-encoded-sha"]
-            },
-            "description": "Encodes any JSON as a Branca token (key = SHA256(snr_decimal + BRANCA_SALT)) and writes it to the card as an NDEF text record. Use read-decoded-sha to verify after writing."
-          }
-        },
-        {
-          "name": "Decode Branca Token — SHA256+Salt",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"branca_token\": \"\", \"snr_decimal\": 0}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/decode-sha",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "decode-sha"]
-            },
-            "description": "Offline decode a Branca token. Key = SHA256(snr_decimal + BRANCA_SALT)."
-          }
-        },
-        {
           "name": "Halt Card",
           "request": {
             "method": "POST",
@@ -341,6 +94,124 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "card", "halt"]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "MD5 Endpoints",
+      "item": [
+        {
+          "name": "Read & Decode — MD5 (Branca)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mode\": 0, \"key_mode\": 0, \"key\": \"D3F7D3F7D3F7\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/1/read-decoded",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "1", "read-decoded"]
+            },
+            "description": "Reads card and decodes Branca token. Key = hex(MD5(snr_decimal))."
+          }
+        },
+        {
+          "name": "Encode & Write — MD5 (Branca)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"D3F7D3F7D3F7\",\n  \"data\": {\n    \"date_issued\": \"2026-02-23\",\n    \"owner_name\": \"Maria Beatriz Alexa Miranda\",\n    \"plate_number\": \"PEQ705\",\n    \"engine_number\": \"4M41UCAU848\",\n    \"chassis_number\": \"MMKYDJTFVFSR74\",\n    \"vin\": \"MMBJNKB40AD012345\",\n    \"file_number\": \"1901-000987654320\",\n    \"vehicle_details\": {\n      \"category\": \"Pickup Truck\",\n      \"body_type\": \"Pickup Truck - 4 Door\",\n      \"gross_weight\": 2370,\n      \"net_weight\": 1900,\n      \"max_power_kw\": null,\n      \"series\": \"012345\"\n    },\n    \"specifications\": {\n      \"color\": \"Red\",\n      \"make_brand\": \"Mitsubishi\",\n      \"year_model\": 2010,\n      \"fuel_type\": \"Diesel\",\n      \"classification\": \"Private\",\n      \"vehicle_type\": \"LCV\",\n      \"year_rebuilt\": null,\n      \"piston_displacement_cc\": 2396,\n      \"passenger_capacity\": 5\n    },\n    \"encumbrance\": {\n      \"encumbered_to\": \"BDO Unibank\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/1/write-encoded",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "1", "write-encoded"]
+            },
+            "description": "Encodes any JSON as a Branca token (key = hex(MD5(snr_decimal))) and writes it to the card as an NDEF text record. Use read-decoded to verify after writing."
+          }
+        }
+      ]
+    },
+    {
+      "name": "SHA256 Endpoints",
+      "item": [
+        {
+          "name": "Read & Decode — SHA256+Salt (Branca)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mode\": 0, \"key_mode\": 0, \"key\": \"D3F7D3F7D3F7\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/2/read-decoded",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "2", "read-decoded"]
+            },
+            "description": "Reads card and decodes Branca token. Key = SHA256(snr_decimal + BRANCA_SALT)."
+          }
+        },
+        {
+          "name": "Encode & Write — SHA256+Salt (Branca)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"D3F7D3F7D3F7\",\n  \"data\": {\n    \"date_issued\": \"2026-02-23\",\n    \"owner_name\": \"Maria Beatriz Alexa Miranda\",\n    \"plate_number\": \"PEQ705\",\n    \"engine_number\": \"4M41UCAU848\",\n    \"chassis_number\": \"MMKYDJTFVFSR74\",\n    \"vin\": \"MMBJNKB40AD012345\",\n    \"file_number\": \"1901-000987654320\",\n    \"vehicle_details\": {\n      \"category\": \"Pickup Truck\",\n      \"body_type\": \"Pickup Truck - 4 Door\",\n      \"gross_weight\": 2370,\n      \"net_weight\": 1900,\n      \"max_power_kw\": null,\n      \"series\": \"012345\"\n    },\n    \"specifications\": {\n      \"color\": \"Red\",\n      \"make_brand\": \"Mitsubishi\",\n      \"year_model\": 2010,\n      \"fuel_type\": \"Diesel\",\n      \"classification\": \"Private\",\n      \"vehicle_type\": \"LCV\",\n      \"year_rebuilt\": null,\n      \"piston_displacement_cc\": 2396,\n      \"passenger_capacity\": 5\n    },\n    \"encumbrance\": {\n      \"encumbered_to\": \"BDO Unibank\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/2/write-encoded",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "2", "write-encoded"]
+            },
+            "description": "Encodes any JSON as a Branca token (key = SHA256(snr_decimal + BRANCA_SALT)) and writes it to the card as an NDEF text record. Use read-decoded to verify after writing."
           }
         }
       ]
@@ -540,11 +411,6 @@
     {
       "key": "base_url",
       "value": "http://localhost:8080",
-      "type": "string"
-    },
-    {
-      "key": "key_default",
-      "value": "FFFFFFFFFFFF",
       "type": "string"
     }
   ]

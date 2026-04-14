@@ -128,17 +128,6 @@
 - **If skipped**: Card not selected, authentication fails
 - **Fix**: Always start with `/card/detect`
 
-#### ✅ Solution 5: Using use_pass=true without proper setup
-- **Solution**: Try use_pass=false (standard method):
-  ```json
-  {
-    "use_pass": false,
-    "key_mode": 0,
-    "key": "FFFFFFFFFFFF",
-    "sector": 0,
-    "block": 1
-  }
-  ```
 
 ---
 
@@ -289,8 +278,7 @@ curl -X POST http://localhost:8080/api/v1/card/read \
     "sector": 0,
     "block": 1,
     "key_mode": 0,
-    "key": "FFFFFFFFFFFF",
-    "use_pass": false
+    "key": "FFFFFFFFFFFF"
   }'
 ```
 Expected:

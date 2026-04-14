@@ -201,8 +201,7 @@ curl -X POST http://localhost:8080/api/v1/card/read \
     "sector": 0,
     "block": 1,
     "key_mode": 0,
-    "key": "FFFFFFFFFFFF",
-    "use_pass": false
+    "key": "FFFFFFFFFFFF"
   }'
 ```
 Response: `{"success":true,"data":{"data":"000102...0F",...}}`
