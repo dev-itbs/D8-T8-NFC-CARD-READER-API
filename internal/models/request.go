@@ -92,17 +92,17 @@ type CardDecodeRequest struct {
 
 // CardReadDecodedRequest reads all blocks and decodes the Branca token in one step
 type CardReadDecodedRequest struct {
-	Mode    int    `json:"mode"`     // 0 = IDLE, 1 = ALL
-	KeyMode int    `json:"key_mode"` // 0-2 for KEY A, 4-6 for KEY B
-	Key     string `json:"key"`      // Hex string (12 chars for 6 bytes)
-	UsePass bool   `json:"use_pass"` // If true, use dc_authentication_pass
+	Mode    int    `json:"mode" example:"0"`             // 0 = IDLE, 1 = ALL
+	KeyMode int    `json:"key_mode" example:"0"`         // 0-2 for KEY A, 4-6 for KEY B
+	Key     string `json:"key" example:"FFFFFFFFFFFF"`   // Hex string (12 chars for 6 bytes)
+	UsePass bool   `json:"use_pass" example:"false"`     // If true, use dc_authentication_pass
 }
 
 // CardWriteEncodedRequest encodes any JSON value as a Branca token and writes it to the card
 type CardWriteEncodedRequest struct {
-	Mode    int             `json:"mode"`     // 0 = IDLE, 1 = ALL
-	KeyMode int             `json:"key_mode"` // 0-2 for KEY A, 4-6 for KEY B
-	Key     string          `json:"key"`      // Hex string (12 chars for 6 bytes)
-	UsePass bool            `json:"use_pass"` // If true, use dc_authentication_pass
-	Data    json.RawMessage `json:"data"`     // Any JSON value to encode into the card
+	Mode    int             `json:"mode" example:"0"`             // 0 = IDLE, 1 = ALL
+	KeyMode int             `json:"key_mode" example:"0"`         // 0-2 for KEY A, 4-6 for KEY B
+	Key     string          `json:"key" example:"FFFFFFFFFFFF"`   // Hex string (12 chars for 6 bytes)
+	UsePass bool            `json:"use_pass" example:"false"`     // If true, use dc_authentication_pass
+	Data    json.RawMessage `json:"data" swaggertype:"object"`    // Any JSON value to encode into the card
 }
