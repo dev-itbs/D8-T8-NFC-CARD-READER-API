@@ -69,6 +69,53 @@ func (r *Reader) Close() error {
 	return nil
 }
 
+// CardInfo holds the raw identification values returned during card detection.
+type CardInfo struct {
+	SNR  uint32 // 4-byte serial number from dc_anticoll
+	ATQA uint16 // Answer To reQuest Type A from dc_request
+	SAK  uint8  // Select AcKnowledge from dc_select (same value as ISO 14443-3 SAK)
+}
+
+// DetectCardInfo runs the full detect workflow and returns ATQA + SAK in addition to SNR.
+func (r *Reader) DetectCardInfo(mode int) (CardInfo, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var info CardInfo
+
+	var tagType uint16
+	ret, err := r.loader.Call("dc_request", r.icdev, uintptr(mode), uintptr(unsafe.Pointer(&tagType)))
+	if err != nil {
+		return info, fmt.Errorf("dc_request failed: %w", err)
+	}
+	if ret != 0 {
+		return info, fmt.Errorf("dc_request returned %d (no card detected)", ret)
+	}
+	info.ATQA = tagType
+
+	var snr uint32
+	ret, err = r.loader.Call("dc_anticoll", r.icdev, uintptr(0), uintptr(unsafe.Pointer(&snr)))
+	if err != nil {
+		return info, fmt.Errorf("dc_anticoll failed: %w", err)
+	}
+	if ret != 0 {
+		return info, fmt.Errorf("dc_anticoll returned %d", ret)
+	}
+	info.SNR = snr
+
+	var size uint8
+	ret, err = r.loader.Call("dc_select", r.icdev, uintptr(snr), uintptr(unsafe.Pointer(&size)))
+	if err != nil {
+		return info, fmt.Errorf("dc_select failed: %w", err)
+	}
+	if ret != 0 {
+		return info, fmt.Errorf("dc_select returned %d", ret)
+	}
+	info.SAK = size
+
+	return info, nil
+}
+
 // DetectCard detects a card using the proper workflow: request -> anticoll -> select
 func (r *Reader) DetectCard(mode int) (uint32, error) {
 	r.mu.Lock()

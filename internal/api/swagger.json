@@ -325,6 +325,64 @@
                 }
             }
         },
+        "/api/v1/card/identify": {
+            "post": {
+                "description": "Detects a card and returns its ATQA, SAK, and decoded card type (e.g. MIFARE Classic 1K)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Card Operations"
+                ],
+                "summary": "Identify NFC card type",
+                "parameters": [
+                    {
+                        "description": "Detect request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CardDetectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.CardIdentifyResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/card/remove-password": {
             "post": {
                 "description": "Resets all 15 sector keys back to the factory default (FFFFFFFFFFFF) by authenticating with the passkey-derived key. After this, the card can be written to without a password.",
@@ -873,7 +931,7 @@
         },
         "/health": {
             "get": {
-                "description": "Returns the health status of the API",
+                "description": "Returns the health status of the API and whether the card reader is connected",
                 "produces": [
                     "application/json"
                 ],
@@ -913,6 +971,33 @@
                 "snr_hex": {
                     "description": "Hex representation like \"0x1A2B3C4D\"",
                     "type": "string"
+                }
+            }
+        },
+        "models.CardIdentifyResponse": {
+            "type": "object",
+            "properties": {
+                "atqa": {
+                    "description": "e.g. \"0x0004\"",
+                    "type": "string"
+                },
+                "card_type": {
+                    "description": "e.g. \"MIFARE Classic 1K\"",
+                    "type": "string"
+                },
+                "sak": {
+                    "description": "e.g. \"0x08\"",
+                    "type": "string"
+                },
+                "snr_decimal": {
+                    "type": "integer"
+                },
+                "snr_hex": {
+                    "type": "string"
+                },
+                "writable": {
+                    "description": "true for Classic 1K/4K/Mini",
+                    "type": "boolean"
                 }
             }
         },

@@ -101,6 +101,16 @@ type CardRemovePasswordResponse struct {
 	Unlocked        bool   `json:"unlocked"`          // true when all 15 sectors were restored
 }
 
+// CardIdentifyResponse is returned by the identify endpoint
+type CardIdentifyResponse struct {
+	SNRHex     string `json:"snr_hex"`
+	SNRDecimal uint32 `json:"snr_decimal"`
+	ATQA       string `json:"atqa"`        // e.g. "0x0004"
+	SAK        string `json:"sak"`         // e.g. "0x08"
+	CardType   string `json:"card_type"`   // e.g. "MIFARE Classic 1K"
+	Writable   bool   `json:"writable"`    // true for Classic 1K/4K/Mini
+}
+
 // ErrorResponse is returned on error (wrapped in Response)
 type ErrorResponse struct {
 	Error string `json:"error"`

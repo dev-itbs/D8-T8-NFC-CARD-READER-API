@@ -27,6 +27,7 @@ func NewRouter(r *reader.Reader, salt string) *chi.Mux {
 	// Card Operations
 	cardHandlers := handlers.NewCardHandlers(r, salt)
 	router.Post("/api/v1/card/detect", cardHandlers.Detect)
+	router.Post("/api/v1/card/identify", cardHandlers.Identify)
 	router.Post("/api/v1/card/halt", cardHandlers.Halt)
 	router.Post("/api/v1/card/set-password", cardHandlers.SetPassword)
 	router.Post("/api/v1/card/remove-password", cardHandlers.RemovePassword)

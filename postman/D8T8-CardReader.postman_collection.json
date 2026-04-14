@@ -76,6 +76,27 @@
           }
         },
         {
+          "name": "Identify Card",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mode\": 0}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/identify",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "identify"]
+            }
+          }
+        },
+        {
           "name": "Halt Card",
           "request": {
             "method": "POST",

@@ -266,6 +266,87 @@ func (h *CardHandlers) Detect(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// Identify godoc
+//
+//	@Summary		Identify NFC card type
+//	@Description	Detects a card and returns its ATQA, SAK, and decoded card type (e.g. MIFARE Classic 1K)
+//	@Tags			Card Operations
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.CardDetectRequest						true	"Detect request"
+//	@Success		200		{object}	models.Response{data=models.CardIdentifyResponse}
+//	@Failure		404		{object}	models.DetailedErrorResponse
+//	@Failure		500		{object}	models.DetailedErrorResponse
+//	@Router			/api/v1/card/identify [post]
+func (h *CardHandlers) Identify(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/identify")
+	if !h.requireReader(w) {
+		return
+	}
+	var req models.CardDetectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
+		return
+	}
+
+	info, err := h.Reader.DetectCardInfo(req.Mode)
+	if err != nil {
+		diagErr := parseDLLError(err.Error(), "dc_request")
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "no card detected") {
+			statusCode = http.StatusNotFound
+			diagErr.Suggestion = "No card detected. Place card on reader."
+		}
+		respondWithDiagnosticError(w, diagErr, statusCode)
+		return
+	}
+	h.Reader.Halt()
+
+	cardType, writable := decodeCardType(info.SAK, info.ATQA)
+	log.Printf("[API] Identify: SNR=%08X ATQA=0x%04X SAK=0x%02X → %s", info.SNR, info.ATQA, info.SAK, cardType)
+
+	resp := models.Response{
+		Success: true,
+		Message: "Card identified",
+		Data: models.CardIdentifyResponse{
+			SNRHex:     fmt.Sprintf("0x%08X", info.SNR),
+			SNRDecimal: info.SNR,
+			ATQA:       fmt.Sprintf("0x%04X", info.ATQA),
+			SAK:        fmt.Sprintf("0x%02X", info.SAK),
+			CardType:   cardType,
+			Writable:   writable,
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// decodeCardType returns a human-readable card type name and whether the card
+// is writable by the MIFARE Classic write commands used in this application.
+func decodeCardType(sak uint8, atqa uint16) (string, bool) {
+	switch sak {
+	case 0x08:
+		return "MIFARE Classic 1K", true
+	case 0x18:
+		return "MIFARE Classic 4K", true
+	case 0x09:
+		return "MIFARE Classic Mini", true
+	case 0x00:
+		if atqa == 0x0044 {
+			return "MIFARE Ultralight / NTAG (not supported by this API)", false
+		}
+		return fmt.Sprintf("Unknown SAK=0x00 ATQA=0x%04X", atqa), false
+	case 0x20:
+		return "MIFARE DESFire / MIFARE Plus SL3 (not supported by this API)", false
+	case 0x28:
+		return "SmartMX with MIFARE Classic 1K emulation", true
+	case 0x38:
+		return "SmartMX with MIFARE Classic 4K emulation", true
+	default:
+		return fmt.Sprintf("Unknown (SAK=0x%02X ATQA=0x%04X)", sak, atqa), false
+	}
+}
+
 // Halt godoc
 //
 //	@Summary		Halt card
@@ -609,8 +690,14 @@ func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 				h.Reader.DetectCard(req.Mode) //nolint:errcheck
 				continue
 			}
+			// Verify auth is genuine — dc_authentication can false-positive for FFFFFFFFFFFF
+			if _, readErr := h.Reader.ReadBlock(block0); readErr != nil {
+				log.Printf("[API] WriteEncoded: sector %d auth false-positive (%v), re-detecting", sector, readErr)
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
 			authenticated = true
-			log.Printf("[API] WriteEncoded: sector %d authenticated with key[%d]", sector, keyIdx)
+			log.Printf("[API] WriteEncoded: sector %d authenticated + verified with key[%d]", sector, keyIdx)
 			break
 		}
 
@@ -962,8 +1049,14 @@ func (h *CardHandlers) WriteEncodedSHA(w http.ResponseWriter, r *http.Request) {
 				h.Reader.DetectCard(req.Mode) //nolint:errcheck
 				continue
 			}
+			// Verify auth is genuine — dc_authentication can false-positive for FFFFFFFFFFFF
+			if _, readErr := h.Reader.ReadBlock(block0); readErr != nil {
+				log.Printf("[API] WriteEncodedSHA: sector %d auth false-positive (%v), re-detecting", sector, readErr)
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
 			authenticated = true
-			log.Printf("[API] WriteEncodedSHA: sector %d authenticated with key[%d]", sector, keyIdx)
+			log.Printf("[API] WriteEncodedSHA: sector %d authenticated + verified with key[%d]", sector, keyIdx)
 			break
 		}
 
