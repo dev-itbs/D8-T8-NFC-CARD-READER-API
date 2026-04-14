@@ -802,6 +802,12 @@
         },
         "models.CardReadDecodedRequest": {
             "type": "object",
+            "example": {
+                "mode": 0,
+                "key_mode": 0,
+                "key": "FFFFFFFFFFFF",
+                "use_pass": false
+            },
             "properties": {
                 "key": {
                     "description": "Hex string (12 chars for 6 bytes)",
@@ -839,7 +845,38 @@
             }
         },
         "models.CardWriteEncodedRequest": {
-            "type": "object"
+            "type": "object",
+            "example": {
+                "mode": 0,
+                "key_mode": 0,
+                "key": "FFFFFFFFFFFF",
+                "use_pass": false,
+                "data": {
+                    "license_no": "A1234567",
+                    "name": "Juan Dela Cruz"
+                }
+            },
+            "properties": {
+                "mode": {
+                    "description": "0 = IDLE, 1 = ALL",
+                    "type": "integer"
+                },
+                "key_mode": {
+                    "description": "0-2 for KEY A, 4-6 for KEY B",
+                    "type": "integer"
+                },
+                "key": {
+                    "description": "Hex string (12 chars for 6 bytes), e.g. \"D3F7D3F7D3F7\"",
+                    "type": "string"
+                },
+                "use_pass": {
+                    "description": "If true, use dc_authentication_pass",
+                    "type": "boolean"
+                },
+                "data": {
+                    "description": "Any JSON value to encode into the Branca token and write to the card"
+                }
+            }
         },
         "models.CardWriteEncodedResponse": {
             "type": "object",
