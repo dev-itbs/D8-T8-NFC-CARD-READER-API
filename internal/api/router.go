@@ -18,7 +18,7 @@ func NewRouter(r *reader.Reader, salt string) *chi.Mux {
 	router.Use(middleware.AllowContentType("application/json"))
 
 	// Health check
-	router.Get("/health", handlers.HealthHandler)
+	router.Get("/health", handlers.HealthHandler(r))
 
 	// Swagger docs
 	router.Get("/api/docs", docsHandler)
@@ -28,18 +28,16 @@ func NewRouter(r *reader.Reader, salt string) *chi.Mux {
 	cardHandlers := handlers.NewCardHandlers(r, salt)
 	router.Post("/api/v1/card/detect", cardHandlers.Detect)
 	router.Post("/api/v1/card/halt", cardHandlers.Halt)
+	router.Post("/api/v1/card/set-password", cardHandlers.SetPassword)
+	router.Post("/api/v1/card/remove-password", cardHandlers.RemovePassword)
 
 	// MD5 Endpoints
 	router.Post("/api/v1/card/1/read-decoded", cardHandlers.ReadDecodedMD5)
-	router.Post("/api/v1/card/1/read-decoded-locked", cardHandlers.ReadDecodedLockedMD5)
 	router.Post("/api/v1/card/1/write-encoded", cardHandlers.WriteEncodedMD5)
-	router.Post("/api/v1/card/1/write-encoded-locked", cardHandlers.WriteEncodedLockedMD5)
 
 	// SHA256 Endpoints
 	router.Post("/api/v1/card/2/read-decoded", cardHandlers.ReadDecodedSHA)
-	router.Post("/api/v1/card/2/read-decoded-locked", cardHandlers.ReadDecodedLockedSHA)
 	router.Post("/api/v1/card/2/write-encoded", cardHandlers.WriteEncodedSHA)
-	router.Post("/api/v1/card/2/write-encoded-locked", cardHandlers.WriteEncodedLockedSHA)
 
 	// Device operations
 	deviceHandlers := handlers.NewDeviceHandlers(r)

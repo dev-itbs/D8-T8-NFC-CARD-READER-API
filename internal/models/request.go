@@ -94,16 +94,6 @@ type CardReadDecodedRequest struct {
 	Key     string `json:"key" example:"FFFFFFFFFFFF"`   // Hex string (12 chars for 6 bytes)
 }
 
-// CardReadDecodedLockedRequest reads all blocks from a passkey-locked card and decodes the Branca token.
-// The passkey is used to derive the Mifare sector key (MD5(passkey)[0:6]) that was set during a
-// locked write, allowing authentication against sectors whose default NDEF keys have been replaced.
-type CardReadDecodedLockedRequest struct {
-	Mode    int    `json:"mode" example:"0"`                // 0 = IDLE, 1 = ALL
-	KeyMode int    `json:"key_mode" example:"0"`            // 0-2 for KEY A, 4-6 for KEY B
-	Key     string `json:"key" example:"FFFFFFFFFFFF"`      // Fallback sector key (hex, 12 chars); tried after the passkey-derived key
-	Passkey string `json:"passkey" example:"mySecretPass"`  // Passkey used when the card was locked; required
-}
-
 // CardWriteEncodedRequest encodes any JSON value as a Branca token and writes it to the card
 type CardWriteEncodedRequest struct {
 	Mode    int             `json:"mode" example:"0"`             // 0 = IDLE, 1 = ALL
@@ -112,15 +102,19 @@ type CardWriteEncodedRequest struct {
 	Data    json.RawMessage `json:"data" swaggertype:"object"`    // Any JSON value to encode into the card
 }
 
-// CardWriteEncodedLockedRequest encodes any JSON value as a Branca token, writes it to the card,
-// then locks all sectors by replacing sector keys with a passkey-derived key.
-// After a successful locked write, the normal write-encoded endpoints will fail because
-// they cannot authenticate with the default NDEF keys (D3F7D3F7D3F7, FFFFFFFFFFFF, etc.).
-// To overwrite a locked card, use this endpoint again with the same passkey.
-type CardWriteEncodedLockedRequest struct {
-	Mode    int             `json:"mode" example:"0"`                // 0 = IDLE, 1 = ALL
-	KeyMode int             `json:"key_mode" example:"0"`            // 0-2 for KEY A, 4-6 for KEY B
-	Key     string          `json:"key" example:"FFFFFFFFFFFF"`      // Current sector key (hex, 12 chars = 6 bytes)
-	Passkey string          `json:"passkey" example:"mySecretPass"`  // Lock passkey — required; derives the new sector key
-	Data    json.RawMessage `json:"data" swaggertype:"object"`       // Any JSON value to encode into the card
+// CardSetPasswordRequest sets a write-protection password on the card by replacing all sector keys
+// with a key derived from the passkey (MD5(passkey)[0:6]). The card data is not changed.
+// After this, the card can still be read but cannot be written without the passkey.
+type CardSetPasswordRequest struct {
+	Mode    int    `json:"mode" example:"0"`                // 0 = IDLE, 1 = ALL
+	KeyMode int    `json:"key_mode" example:"0"`            // 0-2 for KEY A, 4-6 for KEY B
+	Key     string `json:"key" example:"FFFFFFFFFFFF"`      // Current sector key (hex, 12 chars); tried during auth
+	Passkey string `json:"passkey" example:"mySecretPass"`  // New password; derives the sector key via MD5(passkey)[0:6]
+}
+
+// CardRemovePasswordRequest removes the write-protection password by resetting all sector keys
+// back to the factory default (FFFFFFFFFFFF). Requires the current passkey to authenticate.
+type CardRemovePasswordRequest struct {
+	Mode    int    `json:"mode" example:"0"`                // 0 = IDLE, 1 = ALL
+	Passkey string `json:"passkey" example:"mySecretPass"`  // Current password used when the card was locked
 }

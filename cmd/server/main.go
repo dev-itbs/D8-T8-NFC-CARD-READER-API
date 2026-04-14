@@ -56,14 +56,15 @@ func main() {
 	log.Printf("DLL Path: %s", cfg.DLLPath)
 	log.Printf("Log File: %s", cfg.LogFile)
 
-	// Initialize the card reader
+	// Initialize the card reader (non-fatal — server starts even without hardware)
 	r, err := reader.New(cfg.DLLPath, cfg.ReaderPort, cfg.ReaderBaud)
 	if err != nil {
-		log.Fatalf("Failed to initialize reader: %v", err)
+		log.Printf("WARNING: Card reader not available: %v", err)
+		log.Printf("Server will start but card/device endpoints will return 503 until the reader is connected and the server is restarted.")
+	} else {
+		log.Println("Card reader initialized successfully")
+		defer r.Close()
 	}
-	defer r.Close()
-
-	log.Println("Card reader initialized successfully")
 
 	// Create router
 	router := api.NewRouter(r, cfg.BrancaSalt)

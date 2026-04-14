@@ -19,6 +19,20 @@ func NewDeviceHandlers(r *reader.Reader) *DeviceHandlers {
 	return &DeviceHandlers{Reader: r}
 }
 
+func (h *DeviceHandlers) requireReader(w http.ResponseWriter) bool {
+	if h.Reader == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Card reader not available. Connect the device and restart the server.",
+			"code":    http.StatusServiceUnavailable,
+		})
+		return false
+	}
+	return true
+}
+
 // GetVersion godoc
 //
 //	@Summary		Get firmware version
@@ -29,6 +43,9 @@ func NewDeviceHandlers(r *reader.Reader) *DeviceHandlers {
 //	@Failure		500	{object}	models.Response
 //	@Router			/api/v1/device/version [get]
 func (h *DeviceHandlers) GetVersion(w http.ResponseWriter, r *http.Request) {
+	if !h.requireReader(w) {
+		return
+	}
 	version, err := h.Reader.GetVersion()
 	if err != nil {
 		respondError(w, "Failed to get version: "+err.Error(), http.StatusInternalServerError)
@@ -60,6 +77,9 @@ func (h *DeviceHandlers) GetVersion(w http.ResponseWriter, r *http.Request) {
 //	@Failure		500		{object}	models.Response
 //	@Router			/api/v1/device/beep [post]
 func (h *DeviceHandlers) Beep(w http.ResponseWriter, r *http.Request) {
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.DeviceBeepRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -99,6 +119,9 @@ func (h *DeviceHandlers) Beep(w http.ResponseWriter, r *http.Request) {
 //	@Failure		500		{object}	models.Response
 //	@Router			/api/v1/device/reset [post]
 func (h *DeviceHandlers) Reset(w http.ResponseWriter, r *http.Request) {
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.DeviceResetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -133,6 +156,9 @@ func (h *DeviceHandlers) Reset(w http.ResponseWriter, r *http.Request) {
 //	@Failure		500		{object}	models.Response
 //	@Router			/api/v1/device/eeprom/read [post]
 func (h *DeviceHandlers) ReadEEPROM(w http.ResponseWriter, r *http.Request) {
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.EEPROMReadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -180,6 +206,9 @@ func (h *DeviceHandlers) ReadEEPROM(w http.ResponseWriter, r *http.Request) {
 //	@Failure		500		{object}	models.Response
 //	@Router			/api/v1/device/eeprom/write [post]
 func (h *DeviceHandlers) WriteEEPROM(w http.ResponseWriter, r *http.Request) {
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.EEPROMWriteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -225,6 +254,9 @@ func (h *DeviceHandlers) WriteEEPROM(w http.ResponseWriter, r *http.Request) {
 //	@Failure		500		{object}	models.Response
 //	@Router			/api/v1/device/value/init [post]
 func (h *DeviceHandlers) InitVal(w http.ResponseWriter, r *http.Request) {
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.InitValRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -264,6 +296,9 @@ func (h *DeviceHandlers) InitVal(w http.ResponseWriter, r *http.Request) {
 //	@Failure		500		{object}	models.Response
 //	@Router			/api/v1/device/value/increment [post]
 func (h *DeviceHandlers) Increment(w http.ResponseWriter, r *http.Request) {
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.IncrementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -303,6 +338,9 @@ func (h *DeviceHandlers) Increment(w http.ResponseWriter, r *http.Request) {
 //	@Failure		500		{object}	models.Response
 //	@Router			/api/v1/device/value/decrement [post]
 func (h *DeviceHandlers) Decrement(w http.ResponseWriter, r *http.Request) {
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.DecrementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -342,6 +380,9 @@ func (h *DeviceHandlers) Decrement(w http.ResponseWriter, r *http.Request) {
 //	@Failure		500		{object}	models.Response
 //	@Router			/api/v1/device/value/read [post]
 func (h *DeviceHandlers) ReadVal(w http.ResponseWriter, r *http.Request) {
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.ReadValRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)

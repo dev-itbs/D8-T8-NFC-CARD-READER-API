@@ -85,17 +85,20 @@ type CardWriteEncodedResponse struct {
 	BlocksWritten int    `json:"blocks_written"`
 }
 
-// CardWriteEncodedLockedResponse is the response for encoding JSON + writing + locking the card.
-// SectorsLocked counts how many of the 15 data sectors had their keys successfully replaced.
-// Locked is true only when all 15 sectors were locked (SectorsLocked == 15).
-type CardWriteEncodedLockedResponse struct {
+// CardSetPasswordResponse is returned after setting a write-protection password on the card.
+type CardSetPasswordResponse struct {
 	SNRHex        string `json:"snr_hex"`
 	SNRDecimal    uint32 `json:"snr_decimal"`
-	BrancaToken   string `json:"branca_token"`
-	BytesWritten  int    `json:"bytes_written"`
-	BlocksWritten int    `json:"blocks_written"`
-	SectorsLocked int    `json:"sectors_locked"`
-	Locked        bool   `json:"locked"`
+	SectorsLocked int    `json:"sectors_locked"` // number of sectors whose keys were changed (max 15)
+	Locked        bool   `json:"locked"`          // true when all 15 sectors were locked
+}
+
+// CardRemovePasswordResponse is returned after removing the write-protection password.
+type CardRemovePasswordResponse struct {
+	SNRHex          string `json:"snr_hex"`
+	SNRDecimal      uint32 `json:"snr_decimal"`
+	SectorsUnlocked int    `json:"sectors_unlocked"` // number of sectors restored to default key
+	Unlocked        bool   `json:"unlocked"`          // true when all 15 sectors were restored
 }
 
 // ErrorResponse is returned on error (wrapped in Response)

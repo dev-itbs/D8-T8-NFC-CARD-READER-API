@@ -204,6 +204,39 @@ func (r *Reader) ReadBlock(addr int) ([16]byte, error) {
 	return data, nil
 }
 
+// ChangeBlock3 updates the sector trailer (block 3) using dc_changeb3.
+// This is the recommended DLL function for updating sector keys and access bits.
+// Requires prior authentication with Authenticate() for the sector.
+//
+//   - secNr:    sector number (1-15)
+//   - keyA:     new 6-byte KEY A to write
+//   - b0..b3:   trailer bytes 6-9 (3 access-condition bytes + user/GPB byte)
+//   - bk:       supplementary byte — pass 0 (unused on most firmware versions)
+//   - keyB:     new 6-byte KEY B to write
+func (r *Reader) ChangeBlock3(secNr int, keyA [6]byte, b0, b1, b2, b3, bk byte, keyB [6]byte) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	log.Printf("[READER] ChangeBlock3: sector=%d, keyA=%X, access=[%02X %02X %02X %02X], bk=%02X, keyB=%X",
+		secNr, keyA, b0, b1, b2, b3, bk, keyB)
+
+	ret, err := r.loader.Call("dc_changeb3", r.icdev, uintptr(secNr),
+		uintptr(unsafe.Pointer(&keyA[0])),
+		uintptr(b0), uintptr(b1), uintptr(b2), uintptr(b3), uintptr(bk),
+		uintptr(unsafe.Pointer(&keyB[0])))
+	if err != nil {
+		log.Printf("[READER] ChangeBlock3 ERROR: %v", err)
+		return fmt.Errorf("dc_changeb3 failed: %w", err)
+	}
+	if ret != 0 {
+		log.Printf("[READER] ChangeBlock3 failed: ret=%d (check authentication and access bits)", ret)
+		return fmt.Errorf("dc_changeb3 returned %d", ret)
+	}
+
+	log.Printf("[READER] ChangeBlock3 successful")
+	return nil
+}
+
 // WriteBlock writes 16 bytes to a block
 // addr: Block address (0-63). Calculate from: block_addr = sector * 4 + block_within_sector
 func (r *Reader) WriteBlock(addr int, data [16]byte) error {

@@ -6,7 +6,7 @@ A Go REST API for reading and writing contactless smart cards using the D8/T8 ca
 
 - **Card Detection**: Detect cards and retrieve their serial numbers
 - **Card Read/Write**: Read and write 16-byte blocks from/to cards with authentication
-- **Write & Lock**: Write data and lock card sectors with a passkey so only the passkey holder can overwrite
+- **Password Protection**: Set or remove a write-protection password on card sectors without touching data
 - **Device Control**: Beep, reset, and manage device settings
 - **EEPROM Management**: Read/write device EEPROM
 - **Value Blocks**: Initialize, increment, decrement, and read value blocks
@@ -124,7 +124,7 @@ func (h *CardHandlers) MyNewHandler(w http.ResponseWriter, r *http.Request) {
 | Tag | Router comment | Endpoints |
 |-----|----------------|-----------|
 | `Health` | `// Health check` | `/health` |
-| `Card Operations` | `// Card Operations` | detect, halt |
+| `Card Operations` | `// Card Operations` | detect, halt, set-password, remove-password |
 | `MD5 Endpoints` | `// MD5 Endpoints` | group 1 read/write |
 | `SHA256 Endpoints` | `// SHA256 Endpoints` | group 2 read/write |
 | `Device` | `// Device operations` | version, beep, reset, eeprom, value blocks |
@@ -275,33 +275,6 @@ Key derivation: `hex(MD5(snr_decimal))`
 }
 ```
 
-> **Note:** This endpoint tries only the default NDEF keys. If the card was written with `write-encoded-locked`, use `read-decoded-locked` instead.
-
----
-
-#### Read & Decode Locked — MD5 (Branca)
-
-**POST** `/api/v1/card/1/read-decoded-locked`
-
-Same as `read-decoded` but for cards locked with `write-encoded-locked`. The `passkey` is used to derive the Mifare sector key (`MD5(passkey)[0:6]`) that replaced the default NDEF keys during locking. That key is tried first for every sector before falling back to the defaults.
-
-**Request:**
-```json
-{
-  "mode": 0,
-  "key_mode": 0,
-  "key": "FFFFFFFFFFFF",
-  "passkey": "mySecretPass"
-}
-```
-
-**Parameters:**
-- `mode`, `key_mode`: Same as the standard read endpoint
-- `key`: Optional fallback Mifare key — leave as `FFFFFFFFFFFF` unless you have a specific reason to override
-- `passkey`: **Required.** The same passkey used when the card was written with `write-encoded-locked`
-
-**Response:** Same shape as `read-decoded`.
-
 ---
 
 #### Encode & Write — MD5 (Branca)
@@ -420,30 +393,6 @@ Key derivation: `SHA256(snr_decimal + BRANCA_SALT)` → 32 raw bytes
 
 **Response:** Same shape as `read-decoded` (MD5).
 
-> **Note:** This endpoint tries only the default NDEF keys. If the card was written with `write-encoded-locked`, use `read-decoded-locked` instead.
-
----
-
-#### Read & Decode Locked — SHA256+Salt (Branca)
-
-**POST** `/api/v1/card/2/read-decoded-locked`
-
-Same as `read-decoded-locked` (MD5) but decrypts the Branca token with `SHA256(snr_decimal + BRANCA_SALT)`. Use this when the card was written with the SHA256 variant of `write-encoded-locked`.
-
-**Request:**
-```json
-{
-  "mode": 0,
-  "key_mode": 0,
-  "key": "FFFFFFFFFFFF",
-  "passkey": "mySecretPass"
-}
-```
-
-**Parameters:** Same as the MD5 locked read — `passkey` is required.
-
-**Response:** Same shape as `read-decoded`.
-
 ---
 
 #### Encode & Write — SHA256+Salt (Branca)
@@ -463,16 +412,11 @@ Same as `write-encoded-md5` but uses SHA256+salt key derivation. Requires `BRANC
 
 ---
 
-#### Encode, Write & Lock — MD5 (Branca)
+#### Set Password
 
-**POST** `/api/v1/card/1/write-encoded-locked`
+**POST** `/api/v1/card/set-password`
 
-Writes data to the card exactly like `write-encoded` (group 1), then **locks all 15 data sectors** by replacing their Mifare sector keys with a key derived from the passkey: `MD5(passkey)[0:6]`.
-
-After a successful lock:
-- The normal `write-encoded` endpoints will **fail with an authentication error** — they try the default NDEF keys (`D3F7D3F7D3F7`, `FFFFFFFFFFFF`, etc.) which no longer work.
-- An omitted or wrong `passkey` on this endpoint will also fail to authenticate.
-- To overwrite the card later, call this same endpoint again with the **same passkey** (the system derives the sector key from the passkey and authenticates automatically).
+Changes all 15 sector keys to a key derived from the passkey (`MD5(passkey)[0:6]`). Card data is not touched. After this, writing to the card will fail without the passkey. Reading is unaffected.
 
 **Request:**
 ```json
@@ -480,69 +424,63 @@ After a successful lock:
   "mode": 0,
   "key_mode": 0,
   "key": "FFFFFFFFFFFF",
-  "passkey": "mySecretPass",
-  "data": {
-    "date_issued": "2026-02-23",
-    "owner_name": "Maria Beatriz Alexa Miranda",
-    "plate_number": "PEQ705"
-  }
+  "passkey": "mySecretPass"
 }
 ```
 
 **Parameters:**
 - `mode`: 0 = IDLE, 1 = ALL
 - `key_mode`: 0-2 for KEY A, 4-6 for KEY B
-- `key`: Current sector key (use `FFFFFFFFFFFF` for a fresh card; ignored when the card is already locked with the passkey)
-- `passkey`: **Required.** Human-readable password. A 6-byte Mifare key is derived as `MD5(passkey)[0:6]` and written to every sector trailer (KEY A and KEY B).
-- `data`: Any JSON value to encode into the card
+- `key`: Current sector key used to authenticate before changing (`FFFFFFFFFFFF` for a fresh card)
+- `passkey`: **Required.** New password — derives the sector key via `MD5(passkey)[0:6]`
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Card encoded, written, and locked. 44 blocks written, 15/15 sectors locked.",
+  "message": "Password set. 15/15 sectors write-protected.",
   "data": {
     "snr_hex": "0xA8920A2F",
     "snr_decimal": 2828143151,
-    "branca_token": "<encoded token>",
-    "bytes_written": 704,
-    "blocks_written": 44,
     "sectors_locked": 15,
     "locked": true
   }
 }
 ```
 
-**Response fields:**
-- `sectors_locked`: Number of sectors (0-15) whose trailer keys were successfully changed
-- `locked`: `true` only when all 15 sectors were locked (`sectors_locked == 15`)
-
-**Notes:**
-- Key per-card (Branca): `hex(MD5(string(snr_decimal)))` — same as the normal MD5 write
-- Lock key derivation: `MD5(passkey)[0:6]` → replaces both KEY A and KEY B in every sector trailer
-- The lock key is **never stored** on the server; keep the passkey safe
-- Sector trailer lock operates in two rounds per sector: KEY B first (standard NDEF cards), then KEY A (factory-fresh cards)
-- `sectors_locked < 15` means some sector trailers could not be updated (e.g., already locked with an unknown key); data was still written to all accessible sectors
-
 ---
 
-#### Encode, Write & Lock — SHA256+Salt (Branca)
+#### Remove Password
 
-**POST** `/api/v1/card/2/write-encoded-locked`
+**POST** `/api/v1/card/remove-password`
 
-Same as the MD5 locked write above, but uses `SHA256(snr_decimal + BRANCA_SALT)` for the Branca key derivation (same as the normal SHA256 write endpoint). The sector **lock key derivation is identical**: `MD5(passkey)[0:6]`.
+Resets all 15 sector keys back to the factory default (`FFFFFFFFFFFF`) by authenticating with the passkey. After this, the card can be written to without a password.
 
-Requires `BRANCA_SALT` to be set in the environment.
+**Request:**
+```json
+{
+  "mode": 0,
+  "passkey": "mySecretPass"
+}
+```
 
-**Request:** Same shape as the MD5 locked write, with the same `passkey` field required.
+**Parameters:**
+- `mode`: 0 = IDLE, 1 = ALL
+- `passkey`: **Required.** The current password set on the card
 
-**Response:** Same shape as the MD5 locked write.
-
-**Notes:**
-- Branca key per-card: `SHA256(string(snr_decimal) + BRANCA_SALT)` — same as the normal SHA256 write
-- Lock key: `MD5(passkey)[0:6]` — same derivation as the MD5 locked write
-- Cards written by this endpoint can only be **decoded** by a server with the matching `BRANCA_SALT`
-- Cards written by this endpoint can only be **overwritten** by someone who knows the passkey
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Password removed. 15/15 sectors restored to default key.",
+  "data": {
+    "snr_hex": "0xA8920A2F",
+    "snr_decimal": 2828143151,
+    "sectors_unlocked": 15,
+    "unlocked": true
+  }
+}
+```
 
 ---
 

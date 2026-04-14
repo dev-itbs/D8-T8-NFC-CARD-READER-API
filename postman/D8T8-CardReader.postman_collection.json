@@ -95,6 +95,60 @@
               "path": ["api", "v1", "card", "halt"]
             }
           }
+        },
+        {
+          "name": "Set Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"FFFFFFFFFFFF\",\n  \"passkey\": \"mySecretPass\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/set-password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "set-password"]
+            },
+            "description": "Changes all 15 sector keys to a key derived from the passkey (MD5(passkey)[0:6]). Card data is not modified. After this, writing to the card requires the passkey. Use remove-password to restore the default key."
+          }
+        },
+        {
+          "name": "Remove Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": 0,\n  \"passkey\": \"mySecretPass\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/remove-password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "remove-password"]
+            },
+            "description": "Resets all 15 sector keys back to the factory default (FFFFFFFFFFFF) by authenticating with the passkey. After this, the card can be written to without a password."
+          }
         }
       ]
     },
@@ -129,33 +183,6 @@
           }
         },
         {
-          "name": "Read & Decode Locked — MD5 (Branca)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"FFFFFFFFFFFF\",\n  \"passkey\": \"mySecretPass\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/1/read-decoded-locked",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "1", "read-decoded-locked"]
-            },
-            "description": "Reads a passkey-locked card and decodes the Branca token (key = hex(MD5(snr_decimal))). The passkey derives the Mifare sector key (MD5(passkey)[0:6]) used to authenticate sectors that were locked by write-encoded-locked. Use this instead of read-decoded when the card was written with write-encoded-locked."
-          }
-        },
-        {
           "name": "Encode & Write — MD5 (Branca)",
           "request": {
             "method": "POST",
@@ -180,33 +207,6 @@
               "path": ["api", "v1", "card", "1", "write-encoded"]
             },
             "description": "Encodes any JSON as a Branca token (key = hex(MD5(snr_decimal))) and writes it to the card as an NDEF text record. Use read-decoded to verify after writing."
-          }
-        },
-        {
-          "name": "Encode, Write & Lock — MD5 (Branca)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"FFFFFFFFFFFF\",\n  \"passkey\": \"mySecretPass\",\n  \"data\": {\n    \"date_issued\": \"2026-02-23\",\n    \"owner_name\": \"Maria Beatriz Alexa Miranda\",\n    \"plate_number\": \"PEQ705\",\n    \"engine_number\": \"4M41UCAU848\",\n    \"chassis_number\": \"MMKYDJTFVFSR74\",\n    \"vin\": \"MMBJNKB40AD012345\",\n    \"file_number\": \"1901-000987654320\",\n    \"vehicle_details\": {\n      \"category\": \"Pickup Truck\",\n      \"body_type\": \"Pickup Truck - 4 Door\",\n      \"gross_weight\": 2370,\n      \"net_weight\": 1900,\n      \"max_power_kw\": null,\n      \"series\": \"012345\"\n    },\n    \"specifications\": {\n      \"color\": \"Red\",\n      \"make_brand\": \"Mitsubishi\",\n      \"year_model\": 2010,\n      \"fuel_type\": \"Diesel\",\n      \"classification\": \"Private\",\n      \"vehicle_type\": \"LCV\",\n      \"year_rebuilt\": null,\n      \"piston_displacement_cc\": 2396,\n      \"passenger_capacity\": 5\n    },\n    \"encumbrance\": {\n      \"encumbered_to\": \"BDO Unibank\"\n    }\n  }\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/1/write-encoded-locked",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "1", "write-encoded-locked"]
-            },
-            "description": "Encodes any JSON as a Branca token (key = hex(MD5(snr_decimal))), writes it to the card, then locks all 15 data sectors by replacing sector keys with MD5(passkey)[0:6]. After locking, the normal write-encoded endpoint will fail with an authentication error. To overwrite a locked card, call this endpoint again with the same passkey. Response includes sectors_locked (0-15) and locked (true when all 15 sectors locked)."
           }
         }
       ]
@@ -242,33 +242,6 @@
           }
         },
         {
-          "name": "Read & Decode Locked — SHA256+Salt (Branca)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"FFFFFFFFFFFF\",\n  \"passkey\": \"mySecretPass\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/2/read-decoded-locked",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "2", "read-decoded-locked"]
-            },
-            "description": "Reads a passkey-locked card and decodes the Branca token (key = SHA256(snr_decimal + BRANCA_SALT)). The passkey derives the Mifare sector key (MD5(passkey)[0:6]) used to authenticate sectors that were locked by write-encoded-locked. Use this instead of read-decoded when the card was written with write-encoded-locked (SHA256 variant)."
-          }
-        },
-        {
           "name": "Encode & Write — SHA256+Salt (Branca)",
           "request": {
             "method": "POST",
@@ -293,33 +266,6 @@
               "path": ["api", "v1", "card", "2", "write-encoded"]
             },
             "description": "Encodes any JSON as a Branca token (key = SHA256(snr_decimal + BRANCA_SALT)) and writes it to the card as an NDEF text record. Use read-decoded to verify after writing."
-          }
-        },
-        {
-          "name": "Encode, Write & Lock — SHA256+Salt (Branca)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"FFFFFFFFFFFF\",\n  \"passkey\": \"mySecretPass\",\n  \"data\": {\n    \"date_issued\": \"2026-02-23\",\n    \"owner_name\": \"Maria Beatriz Alexa Miranda\",\n    \"plate_number\": \"PEQ705\",\n    \"engine_number\": \"4M41UCAU848\",\n    \"chassis_number\": \"MMKYDJTFVFSR74\",\n    \"vin\": \"MMBJNKB40AD012345\",\n    \"file_number\": \"1901-000987654320\",\n    \"vehicle_details\": {\n      \"category\": \"Pickup Truck\",\n      \"body_type\": \"Pickup Truck - 4 Door\",\n      \"gross_weight\": 2370,\n      \"net_weight\": 1900,\n      \"max_power_kw\": null,\n      \"series\": \"012345\"\n    },\n    \"specifications\": {\n      \"color\": \"Red\",\n      \"make_brand\": \"Mitsubishi\",\n      \"year_model\": 2010,\n      \"fuel_type\": \"Diesel\",\n      \"classification\": \"Private\",\n      \"vehicle_type\": \"LCV\",\n      \"year_rebuilt\": null,\n      \"piston_displacement_cc\": 2396,\n      \"passenger_capacity\": 5\n    },\n    \"encumbrance\": {\n      \"encumbered_to\": \"BDO Unibank\"\n    }\n  }\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/card/2/write-encoded-locked",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "card", "2", "write-encoded-locked"]
-            },
-            "description": "Encodes any JSON as a Branca token (key = SHA256(snr_decimal + BRANCA_SALT)), writes it to the card, then locks all 15 data sectors by replacing sector keys with MD5(passkey)[0:6]. After locking, the normal write-encoded endpoint will fail with an authentication error. To overwrite a locked card, call this endpoint again with the same passkey. Response includes sectors_locked (0-15) and locked (true when all 15 sectors locked)."
           }
         }
       ]

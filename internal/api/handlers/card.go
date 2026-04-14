@@ -40,8 +40,8 @@ func snrToBrancaKeySHA(snr uint32, salt string) string {
 //
 // Layout on a Mifare Classic 1K NDEF card written by Android NFC Tools:
 //
-//	sector 0  (blocks 0-3)  – UID/MFG + MAD (contains false 0x03 bytes)
-//	sector 1+ (blocks 4-63) – CC (E1 10 ...) followed by NDEF TLV: 03 [len] [records]
+//	sector 0  (blocks 0-3)  â€“ UID/MFG + MAD (contains false 0x03 bytes)
+//	sector 1+ (blocks 4-63) â€“ CC (E1 10 ...) followed by NDEF TLV: 03 [len] [records]
 func extractNDEFText(raw []byte) string {
 	// Start from byte 64 (skip sector 0: UID/MFG block + MAD data).
 	// Sector 0 MAD contains 0x03 bytes that look like NDEF TLV markers but aren't.
@@ -148,12 +148,12 @@ func buildNDEFText(text string) []byte {
 	// NDEF text record payload: status(1) + lang(2) + text
 	lang := "en"
 	ndefPayload := make([]byte, 0, 1+len(lang)+len(text))
-	ndefPayload = append(ndefPayload, byte(len(lang))) // status byte: UTF-8, langLen=2 → 0x02
+	ndefPayload = append(ndefPayload, byte(len(lang))) // status byte: UTF-8, langLen=2 â†’ 0x02
 	ndefPayload = append(ndefPayload, []byte(lang)...)
 	ndefPayload = append(ndefPayload, []byte(text)...)
 
 	// NDEF record: header depends on SR (short record) flag.
-	// SR=1 when payload length ≤ 255, payload length is 1 byte (header 0xD1).
+	// SR=1 when payload length â‰¤ 255, payload length is 1 byte (header 0xD1).
 	// SR=0 when payload length > 255, payload length is 4 bytes big-endian (header 0xC1).
 	var record []byte
 	if len(ndefPayload) <= 255 {
@@ -193,6 +193,22 @@ func NewCardHandlers(r *reader.Reader, salt string) *CardHandlers {
 	return &CardHandlers{Reader: r, Salt: salt}
 }
 
+// requireReader writes a 503 and returns false when no reader is connected.
+// Use at the top of every handler that calls the physical reader.
+func (h *CardHandlers) requireReader(w http.ResponseWriter) bool {
+	if h.Reader == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(models.Response{
+			Success: false,
+			Message: "Card reader not available. Connect the device and restart the server.",
+			Code:    http.StatusServiceUnavailable,
+		})
+		return false
+	}
+	return true
+}
+
 // Detect godoc
 //
 //	@Summary		Detect NFC card
@@ -207,6 +223,9 @@ func NewCardHandlers(r *reader.Reader, salt string) *CardHandlers {
 //	@Router			/api/v1/card/detect [post]
 func (h *CardHandlers) Detect(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/detect")
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.CardDetectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[API] ERROR: Invalid JSON: %v", err)
@@ -258,6 +277,9 @@ func (h *CardHandlers) Detect(w http.ResponseWriter, r *http.Request) {
 //	@Router			/api/v1/card/halt [post]
 func (h *CardHandlers) Halt(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/halt")
+	if !h.requireReader(w) {
+		return
+	}
 	if err := h.Reader.Halt(); err != nil {
 		log.Printf("[API] ERROR: Halt failed: %v", err)
 		respondError(w, "Halt failed: "+err.Error(), http.StatusInternalServerError)
@@ -266,7 +288,7 @@ func (h *CardHandlers) Halt(w http.ResponseWriter, r *http.Request) {
 
 	resp := models.Response{
 		Success: true,
-		Message: "Card halted (deselected). Workflow: DETECT → [READ/WRITE] → HALT → [REPEAT]. Next: call /card/detect to select another card or perform more operations.",
+		Message: "Card halted (deselected). Workflow: DETECT â†’ [READ/WRITE] â†’ HALT â†’ [REPEAT]. Next: call /card/detect to select another card or perform more operations.",
 		Data:    map[string]string{},
 	}
 
@@ -289,6 +311,9 @@ func (h *CardHandlers) Halt(w http.ResponseWriter, r *http.Request) {
 //	@Router			/api/v1/card/1/read-decoded [post]
 func (h *CardHandlers) ReadDecodedMD5(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/read-decoded-md5")
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.CardReadDecodedRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
@@ -318,13 +343,13 @@ func (h *CardHandlers) ReadDecodedMD5(w http.ResponseWriter, r *http.Request) {
 
 	// Step 2: Derive Branca key from SNR decimal (MD5 of decimal string)
 	brancaKey := snrToBrancaKey(snr)
-	log.Printf("[API] ReadDecoded: SNR decimal=%d → branca key=%s", snr, brancaKey)
+	log.Printf("[API] ReadDecoded: SNR decimal=%d â†’ branca key=%s", snr, brancaKey)
 
 	// Step 3: Read all 64 blocks using a sector-based loop.
 	// For each sector, try the user-provided key first, then well-known NDEF keys:
-	//   D3F7D3F7D3F7 — NFC Forum NDEF data sectors (1-15, written by Android apps)
-	//   A0A1A2A3A4A5 — NFC Forum MAD / sector 0 key
-	//   FFFFFFFFFFFF — factory default
+	//   D3F7D3F7D3F7 â€” NFC Forum NDEF data sectors (1-15, written by Android apps)
+	//   A0A1A2A3A4A5 â€” NFC Forum MAD / sector 0 key
+	//   FFFFFFFFFFFF â€” factory default
 	// After a failed authentication Mifare Classic deselects the card, so we
 	// re-detect before trying the next key.
 	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
@@ -345,7 +370,7 @@ func (h *CardHandlers) ReadDecodedMD5(w http.ResponseWriter, r *http.Request) {
 		var block0Data [16]byte
 
 		for keyIdx, tryKey := range allKeys {
-			log.Printf("[API] ReadDecoded: sector %d key[%d]=%X — LoadKey+Auth", sector, keyIdx, tryKey)
+			log.Printf("[API] ReadDecoded: sector %d key[%d]=%X â€” LoadKey+Auth", sector, keyIdx, tryKey)
 
 			// dc_load_key just writes to the reader's RAM; no card interaction, no re-detect needed on failure.
 			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
@@ -360,7 +385,7 @@ func (h *CardHandlers) ReadDecodedMD5(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// Confirm authentication actually worked — a wrong key can still return 0 from Authenticate.
+			// Confirm authentication actually worked â€” a wrong key can still return 0 from Authenticate.
 			data, readErr := h.Reader.ReadBlock(block0)
 			if readErr != nil {
 				log.Printf("[API] ReadDecoded: sector %d auth returned OK but read failed (%v), re-detecting", sector, readErr)
@@ -375,7 +400,7 @@ func (h *CardHandlers) ReadDecodedMD5(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Sector 0 includes all 4 blocks (UID/MFG + MAD data + trailer) to keep startOffset=64 alignment.
-		// Sectors 1-15 skip the sector trailer (block 3) — it holds access keys/bits, not NDEF data,
+		// Sectors 1-15 skip the sector trailer (block 3) â€” it holds access keys/bits, not NDEF data,
 		// and would corrupt the Branca token bytes if included.
 		blocksToRead := 4
 		if sector > 0 {
@@ -483,6 +508,9 @@ func (h *CardHandlers) ReadDecodedMD5(w http.ResponseWriter, r *http.Request) {
 //	@Router			/api/v1/card/1/write-encoded [post]
 func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/write-encoded-md5")
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.CardWriteEncodedRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
@@ -499,7 +527,7 @@ func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Detect card → get SNR
+	// Detect card â†’ get SNR
 	log.Printf("[API] WriteEncoded: detecting card (mode=%d)...", req.Mode)
 	snr, err := h.Reader.DetectCard(req.Mode)
 	if err != nil {
@@ -516,7 +544,7 @@ func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 
 	// Derive Branca key from SNR decimal (same derivation as ReadDecoded)
 	brancaKey := snrToBrancaKey(snr)
-	log.Printf("[API] WriteEncoded: SNR decimal=%d → branca key=%s", snr, brancaKey)
+	log.Printf("[API] WriteEncoded: SNR decimal=%d â†’ branca key=%s", snr, brancaKey)
 
 	// Encode JSON data as Branca token
 	b := branca.NewBranca(brancaKey)
@@ -533,7 +561,7 @@ func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[API] WriteEncoded: NDEF TLV size=%d bytes", len(ndefTLV))
 
 	// Sector 1 block 0 (block 4) = Capability Container; blocks 5,6 = NDEF data (32 bytes).
-	// Sectors 2-15: 3 data blocks each = 42 × 16 = 672 bytes. Total NDEF data: 704 bytes.
+	// Sectors 2-15: 3 data blocks each = 42 Ã— 16 = 672 bytes. Total NDEF data: 704 bytes.
 	const maxNDEFBytes = 704
 	if len(ndefTLV) > maxNDEFBytes {
 		respondWithError(w, "Data too large",
@@ -550,7 +578,7 @@ func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 	var ccBlock [16]byte
 	ccBlock[0] = 0xE1
 	ccBlock[1] = 0x10
-	ccBlock[2] = 0x6D // 109 × 8 = 872 bytes declared capacity
+	ccBlock[2] = 0x6D // 109 Ã— 8 = 872 bytes declared capacity
 	ccBlock[3] = 0x00
 
 	// Try the user-provided key plus well-known NDEF keys (same strategy as ReadDecoded)
@@ -571,7 +599,7 @@ func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 		// Authenticate sector (try each key, re-detect on failure)
 		authenticated := false
 		for keyIdx, tryKey := range allKeys {
-			log.Printf("[API] WriteEncoded: sector %d key[%d] — LoadKey+Auth", sector, keyIdx)
+			log.Printf("[API] WriteEncoded: sector %d key[%d] â€” LoadKey+Auth", sector, keyIdx)
 			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
 				log.Printf("[API] WriteEncoded: sector %d LoadKey failed: %v", sector, loadErr)
 				continue
@@ -664,6 +692,9 @@ func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 //	@Router			/api/v1/card/2/read-decoded [post]
 func (h *CardHandlers) ReadDecodedSHA(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/read-decoded-sha")
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.CardReadDecodedRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
@@ -693,7 +724,7 @@ func (h *CardHandlers) ReadDecodedSHA(w http.ResponseWriter, r *http.Request) {
 
 	// Derive Branca key from SNR decimal using SHA256 + salt
 	brancaKey := snrToBrancaKeySHA(snr, h.Salt)
-	log.Printf("[API] ReadDecodedSHA: SNR decimal=%d → branca key derived via SHA256+salt", snr)
+	log.Printf("[API] ReadDecodedSHA: SNR decimal=%d â†’ branca key derived via SHA256+salt", snr)
 
 	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
 	allKeys := [][6]byte{key}
@@ -710,7 +741,7 @@ func (h *CardHandlers) ReadDecodedSHA(w http.ResponseWriter, r *http.Request) {
 		var block0Data [16]byte
 
 		for keyIdx, tryKey := range allKeys {
-			log.Printf("[API] ReadDecodedSHA: sector %d key[%d]=%X — LoadKey+Auth", sector, keyIdx, tryKey)
+			log.Printf("[API] ReadDecodedSHA: sector %d key[%d]=%X â€” LoadKey+Auth", sector, keyIdx, tryKey)
 
 			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
 				log.Printf("[API] ReadDecodedSHA: sector %d LoadKey failed: %v", sector, loadErr)
@@ -836,6 +867,9 @@ func (h *CardHandlers) ReadDecodedSHA(w http.ResponseWriter, r *http.Request) {
 //	@Router			/api/v1/card/2/write-encoded [post]
 func (h *CardHandlers) WriteEncodedSHA(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] POST /api/v1/card/write-encoded-sha")
+	if !h.requireReader(w) {
+		return
+	}
 	var req models.CardWriteEncodedRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
@@ -852,7 +886,7 @@ func (h *CardHandlers) WriteEncodedSHA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Detect card → get SNR
+	// Detect card â†’ get SNR
 	log.Printf("[API] WriteEncodedSHA: detecting card (mode=%d)...", req.Mode)
 	snr, err := h.Reader.DetectCard(req.Mode)
 	if err != nil {
@@ -869,7 +903,7 @@ func (h *CardHandlers) WriteEncodedSHA(w http.ResponseWriter, r *http.Request) {
 
 	// Derive Branca key from SNR decimal using SHA256 + salt
 	brancaKey := snrToBrancaKeySHA(snr, h.Salt)
-	log.Printf("[API] WriteEncodedSHA: SNR decimal=%d → branca key derived via SHA256+salt", snr)
+	log.Printf("[API] WriteEncodedSHA: SNR decimal=%d â†’ branca key derived via SHA256+salt", snr)
 
 	// Encode JSON data as Branca token
 	b := branca.NewBranca(brancaKey)
@@ -918,7 +952,7 @@ func (h *CardHandlers) WriteEncodedSHA(w http.ResponseWriter, r *http.Request) {
 
 		authenticated := false
 		for keyIdx, tryKey := range allKeys {
-			log.Printf("[API] WriteEncodedSHA: sector %d key[%d] — LoadKey+Auth", sector, keyIdx)
+			log.Printf("[API] WriteEncodedSHA: sector %d key[%d] â€” LoadKey+Auth", sector, keyIdx)
 			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
 				log.Printf("[API] WriteEncodedSHA: sector %d LoadKey failed: %v", sector, loadErr)
 				continue
@@ -994,360 +1028,6 @@ func (h *CardHandlers) WriteEncodedSHA(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// ReadDecodedLockedMD5 godoc
-//
-//	@Summary		Read and decode locked card (MD5)
-//	@Description	Reads all blocks from a passkey-locked card, derives the Mifare sector key from the passkey (MD5(passkey)[0:6]), authenticates, extracts the NDEF Branca token, and decodes it using a key derived from hex(MD5(snr_decimal)). Use this endpoint instead of read-decoded when the card was written with write-encoded-locked.
-//	@Tags			MD5 Endpoints
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body		models.CardReadDecodedLockedRequest					true	"Read request with passkey"
-//	@Success		200		{object}	models.Response{data=models.CardReadDecodedResponse}
-//	@Failure		400		{object}	models.DetailedErrorResponse
-//	@Failure		500		{object}	models.DetailedErrorResponse
-//	@Router			/api/v1/card/1/read-decoded-locked [post]
-func (h *CardHandlers) ReadDecodedLockedMD5(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/1/read-decoded-locked")
-	var req models.CardReadDecodedLockedRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
-		return
-	}
-	if strings.TrimSpace(req.Passkey) == "" {
-		respondError(w, "passkey is required to read a locked card", http.StatusBadRequest)
-		return
-	}
-
-	key, err := reader.KeyFromHex(req.Key)
-	if err != nil {
-		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Derive the 6-byte Mifare key that was set during the locked write
-	passkeyMifareKey, passkeyKeyHex := passkeyToMifareKey(req.Passkey)
-	log.Printf("[API] ReadDecodedLockedMD5: passkey → Mifare key %s", passkeyKeyHex)
-
-	// Detect card
-	log.Printf("[API] ReadDecodedLockedMD5: detecting card (mode=%d)...", req.Mode)
-	snr, err := h.Reader.DetectCard(req.Mode)
-	if err != nil {
-		diagErr := parseDLLError(err.Error(), "dc_request")
-		statusCode := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "no card detected") || strings.Contains(err.Error(), "no card present") {
-			statusCode = http.StatusNotFound
-			diagErr.Suggestion = "No card detected. Place card on reader."
-		}
-		respondWithDiagnosticError(w, diagErr, statusCode)
-		return
-	}
-	log.Printf("[API] ReadDecodedLockedMD5: card detected SNR=%08X (%d)", snr, snr)
-
-	// Derive Branca key from SNR decimal (MD5 method — same as write-encoded-locked for MD5)
-	brancaKey := snrToBrancaKey(snr)
-	log.Printf("[API] ReadDecodedLockedMD5: SNR decimal=%d → branca key=%s", snr, brancaKey)
-
-	// Try passkey-derived key first, then user key, then NDEF defaults
-	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
-	allKeys := [][6]byte{passkeyMifareKey, key}
-	for _, kh := range ndefKeyHexes {
-		k, _ := reader.KeyFromHex(kh)
-		allKeys = append(allKeys, k)
-	}
-
-	rawBytes := make([]byte, 0, 1024)
-	for sector := 0; sector < 16; sector++ {
-		block0 := sector * 4
-
-		authenticated := false
-		var block0Data [16]byte
-
-		for keyIdx, tryKey := range allKeys {
-			log.Printf("[API] ReadDecodedLockedMD5: sector %d key[%d]=%X — LoadKey+Auth", sector, keyIdx, tryKey)
-
-			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
-				log.Printf("[API] ReadDecodedLockedMD5: sector %d LoadKey failed: %v", sector, loadErr)
-				continue
-			}
-			if authErr := h.Reader.Authenticate(req.KeyMode, sector); authErr != nil {
-				log.Printf("[API] ReadDecodedLockedMD5: sector %d Authenticate failed, re-detecting: %v", sector, authErr)
-				h.Reader.DetectCard(req.Mode) //nolint:errcheck
-				continue
-			}
-			data, readErr := h.Reader.ReadBlock(block0)
-			if readErr != nil {
-				log.Printf("[API] ReadDecodedLockedMD5: sector %d auth OK but read failed (%v), re-detecting", sector, readErr)
-				h.Reader.DetectCard(req.Mode) //nolint:errcheck
-				continue
-			}
-			log.Printf("[API] ReadDecodedLockedMD5: sector %d authenticated + verified with key[%d]", sector, keyIdx)
-			authenticated = true
-			block0Data = data
-			break
-		}
-
-		blocksToRead := 4
-		if sector > 0 {
-			blocksToRead = 3
-		}
-		sectorPad := blocksToRead * 16
-
-		if !authenticated {
-			log.Printf("[API] ReadDecodedLockedMD5: sector %d: all keys exhausted, padding %d zeros", sector, sectorPad)
-			rawBytes = append(rawBytes, make([]byte, sectorPad)...)
-			continue
-		}
-
-		rawBytes = append(rawBytes, block0Data[:]...)
-		for blockInSector := 1; blockInSector < blocksToRead; blockInSector++ {
-			blockAddr := block0 + blockInSector
-			data, err := h.Reader.ReadBlock(blockAddr)
-			if err != nil {
-				log.Printf("[API] ReadDecodedLockedMD5: ReadBlock %d failed: %v", blockAddr, err)
-				rawBytes = append(rawBytes, make([]byte, 16)...)
-			} else {
-				rawBytes = append(rawBytes, data[:]...)
-			}
-		}
-	}
-	h.Reader.Halt()
-
-	nonZeroBlocks := 0
-	for i := 0; i < len(rawBytes); i += 16 {
-		end := i + 16
-		if end > len(rawBytes) {
-			end = len(rawBytes)
-		}
-		for _, b := range rawBytes[i:end] {
-			if b != 0 {
-				nonZeroBlocks++
-				break
-			}
-		}
-	}
-	preview := rawBytes
-	if len(preview) > 64 {
-		preview = preview[:64]
-	}
-	log.Printf("[API] ReadDecodedLockedMD5: rawBytes=%d bytes, non-zero blocks=%d, first64=%X", len(rawBytes), nonZeroBlocks, preview)
-
-	token := extractNDEFText(rawBytes)
-	if token == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success":         false,
-			"error":           "No Branca token found",
-			"message":         "Could not find a base62 token in the card data. Check that the passkey is correct and the card was written with write-encoded-locked.",
-			"retryable":       false,
-			"blocks_read":     nonZeroBlocks,
-			"raw_hex_preview": fmt.Sprintf("%X", preview),
-		})
-		return
-	}
-	log.Printf("[API] ReadDecodedLockedMD5: extracted token (len=%d): %.20s...", len(token), token)
-
-	b := branca.NewBranca(brancaKey)
-	payload, err := b.DecodeToString(token)
-	if err != nil {
-		log.Printf("[API] ReadDecodedLockedMD5: Branca decode failed: %v", err)
-		respondWithError(w, "Branca decode failed", err.Error(), http.StatusUnprocessableEntity, false)
-		return
-	}
-	log.Printf("[API] ReadDecodedLockedMD5: raw decoded payload (len=%d): %s", len(payload), payload)
-
-	var parsed interface{}
-	if jsonErr := json.Unmarshal([]byte(payload), &parsed); jsonErr != nil {
-		log.Printf("[API] ReadDecodedLockedMD5: payload is not JSON, returning as string: %v", jsonErr)
-		parsed = payload
-	}
-
-	resp := models.Response{
-		Success: true,
-		Message: "Card read and decoded successfully",
-		Data:    parsed,
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
-}
-
-// ReadDecodedLockedSHA godoc
-//
-//	@Summary		Read and decode locked card (SHA256)
-//	@Description	Reads all blocks from a passkey-locked card, derives the Mifare sector key from the passkey (MD5(passkey)[0:6]), authenticates, extracts the NDEF Branca token, and decodes it using a key derived from SHA256(snr_decimal+BRANCA_SALT). Use this endpoint instead of read-decoded when the card was written with write-encoded-locked (SHA256 variant).
-//	@Tags			SHA256 Endpoints
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body		models.CardReadDecodedLockedRequest					true	"Read request with passkey"
-//	@Success		200		{object}	models.Response{data=models.CardReadDecodedResponse}
-//	@Failure		400		{object}	models.DetailedErrorResponse
-//	@Failure		500		{object}	models.DetailedErrorResponse
-//	@Router			/api/v1/card/2/read-decoded-locked [post]
-func (h *CardHandlers) ReadDecodedLockedSHA(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/2/read-decoded-locked")
-	var req models.CardReadDecodedLockedRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
-		return
-	}
-	if strings.TrimSpace(req.Passkey) == "" {
-		respondError(w, "passkey is required to read a locked card", http.StatusBadRequest)
-		return
-	}
-
-	key, err := reader.KeyFromHex(req.Key)
-	if err != nil {
-		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Derive the 6-byte Mifare key that was set during the locked write
-	passkeyMifareKey, passkeyKeyHex := passkeyToMifareKey(req.Passkey)
-	log.Printf("[API] ReadDecodedLockedSHA: passkey → Mifare key %s", passkeyKeyHex)
-
-	// Detect card
-	log.Printf("[API] ReadDecodedLockedSHA: detecting card (mode=%d)...", req.Mode)
-	snr, err := h.Reader.DetectCard(req.Mode)
-	if err != nil {
-		diagErr := parseDLLError(err.Error(), "dc_request")
-		statusCode := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "no card detected") || strings.Contains(err.Error(), "no card present") {
-			statusCode = http.StatusNotFound
-			diagErr.Suggestion = "No card detected. Place card on reader."
-		}
-		respondWithDiagnosticError(w, diagErr, statusCode)
-		return
-	}
-	log.Printf("[API] ReadDecodedLockedSHA: card detected SNR=%08X (%d)", snr, snr)
-
-	// Derive Branca key using SHA256 + salt (same as write-encoded-locked for SHA256)
-	brancaKey := snrToBrancaKeySHA(snr, h.Salt)
-	log.Printf("[API] ReadDecodedLockedSHA: SNR decimal=%d → branca key derived via SHA256+salt", snr)
-
-	// Try passkey-derived key first, then user key, then NDEF defaults
-	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
-	allKeys := [][6]byte{passkeyMifareKey, key}
-	for _, kh := range ndefKeyHexes {
-		k, _ := reader.KeyFromHex(kh)
-		allKeys = append(allKeys, k)
-	}
-
-	rawBytes := make([]byte, 0, 1024)
-	for sector := 0; sector < 16; sector++ {
-		block0 := sector * 4
-
-		authenticated := false
-		var block0Data [16]byte
-
-		for keyIdx, tryKey := range allKeys {
-			log.Printf("[API] ReadDecodedLockedSHA: sector %d key[%d]=%X — LoadKey+Auth", sector, keyIdx, tryKey)
-
-			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
-				log.Printf("[API] ReadDecodedLockedSHA: sector %d LoadKey failed: %v", sector, loadErr)
-				continue
-			}
-			if authErr := h.Reader.Authenticate(req.KeyMode, sector); authErr != nil {
-				log.Printf("[API] ReadDecodedLockedSHA: sector %d Authenticate failed, re-detecting: %v", sector, authErr)
-				h.Reader.DetectCard(req.Mode) //nolint:errcheck
-				continue
-			}
-			data, readErr := h.Reader.ReadBlock(block0)
-			if readErr != nil {
-				log.Printf("[API] ReadDecodedLockedSHA: sector %d auth OK but read failed (%v), re-detecting", sector, readErr)
-				h.Reader.DetectCard(req.Mode) //nolint:errcheck
-				continue
-			}
-			log.Printf("[API] ReadDecodedLockedSHA: sector %d authenticated + verified with key[%d]", sector, keyIdx)
-			authenticated = true
-			block0Data = data
-			break
-		}
-
-		blocksToRead := 4
-		if sector > 0 {
-			blocksToRead = 3
-		}
-		sectorPad := blocksToRead * 16
-
-		if !authenticated {
-			log.Printf("[API] ReadDecodedLockedSHA: sector %d: all keys exhausted, padding %d zeros", sector, sectorPad)
-			rawBytes = append(rawBytes, make([]byte, sectorPad)...)
-			continue
-		}
-
-		rawBytes = append(rawBytes, block0Data[:]...)
-		for blockInSector := 1; blockInSector < blocksToRead; blockInSector++ {
-			blockAddr := block0 + blockInSector
-			data, err := h.Reader.ReadBlock(blockAddr)
-			if err != nil {
-				log.Printf("[API] ReadDecodedLockedSHA: ReadBlock %d failed: %v", blockAddr, err)
-				rawBytes = append(rawBytes, make([]byte, 16)...)
-			} else {
-				rawBytes = append(rawBytes, data[:]...)
-			}
-		}
-	}
-	h.Reader.Halt()
-
-	nonZeroBlocks := 0
-	for i := 0; i < len(rawBytes); i += 16 {
-		end := i + 16
-		if end > len(rawBytes) {
-			end = len(rawBytes)
-		}
-		for _, b := range rawBytes[i:end] {
-			if b != 0 {
-				nonZeroBlocks++
-				break
-			}
-		}
-	}
-	preview := rawBytes
-	if len(preview) > 64 {
-		preview = preview[:64]
-	}
-	log.Printf("[API] ReadDecodedLockedSHA: rawBytes=%d bytes, non-zero blocks=%d, first64=%X", len(rawBytes), nonZeroBlocks, preview)
-
-	token := extractNDEFText(rawBytes)
-	if token == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success":         false,
-			"error":           "No Branca token found",
-			"message":         "Could not find a base62 token in the card data. Check that the passkey is correct and the card was written with write-encoded-locked.",
-			"retryable":       false,
-			"blocks_read":     nonZeroBlocks,
-			"raw_hex_preview": fmt.Sprintf("%X", preview),
-		})
-		return
-	}
-	log.Printf("[API] ReadDecodedLockedSHA: extracted token (len=%d): %.20s...", len(token), token)
-
-	b := branca.NewBranca(brancaKey)
-	payload, err := b.DecodeToString(token)
-	if err != nil {
-		log.Printf("[API] ReadDecodedLockedSHA: Branca decode failed: %v", err)
-		respondWithError(w, "Branca decode failed", err.Error(), http.StatusUnprocessableEntity, false)
-		return
-	}
-	log.Printf("[API] ReadDecodedLockedSHA: raw decoded payload (len=%d): %s", len(payload), payload)
-
-	var parsed interface{}
-	if jsonErr := json.Unmarshal([]byte(payload), &parsed); jsonErr != nil {
-		log.Printf("[API] ReadDecodedLockedSHA: payload is not JSON, returning as string: %v", jsonErr)
-		parsed = payload
-	}
-
-	resp := models.Response{
-		Success: true,
-		Message: "Card read and decoded successfully",
-		Data:    parsed,
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
-}
-
 // passkeyToMifareKey derives a 6-byte Mifare Classic sector key from an arbitrary passkey string.
 // Derivation: key = MD5(passkey)[0:6]
 // Returns both the raw 6-byte key and its uppercase hex representation (12 chars).
@@ -1363,11 +1043,11 @@ func passkeyToMifareKey(passkey string) ([6]byte, string) {
 //
 //	bytes 0-5  : newKey (KEY A)
 //	bytes 6-9  : 0x7F 0x07 0x88 0x40  (standard NDEF access bits)
-//	bytes 10-15: newKey (KEY B — also replaced so KEY B = passkey-derived)
+//	bytes 10-15: newKey (KEY B â€” also replaced so KEY B = passkey-derived)
 //
 // Authentication is tried in two rounds per sector:
-//  1. KEY B mode (4) — works on standard NDEF cards where only KEY B may write the trailer
-//  2. KEY A mode (userKeyMode) — works on factory-fresh cards where KEY A can write the trailer
+//  1. KEY B mode (4) â€” works on standard NDEF cards where only KEY B may write the trailer
+//  2. KEY A mode (userKeyMode) â€” works on factory-fresh cards where KEY A can write the trailer
 //
 // Keys tried in each round: passkey-derived key, user-supplied key, then well-known NDEF defaults.
 // Returns the number of sectors successfully locked (max 15).
@@ -1379,96 +1059,193 @@ func lockSectorTrailers(h *CardHandlers, mode, userKeyMode int, userKey, newKey 
 		lockKeys = append(lockKeys, k)
 	}
 
-	// Standard NDEF access bits for sectors 1-15 (trailer C1=0,C2=1,C3=1):
-	// KEY A: only KEY B can write it; ACCESS BITS: KEY A|B readable, KEY B writable
-	// KEY B: not publicly readable → KEY B can still authenticate
-	var trailer [16]byte
-	copy(trailer[0:6], newKey[:])   // KEY A = passkey-derived
-	trailer[6] = 0x7F               // \ NDEF standard
-	trailer[7] = 0x07               //   access bits
-	trailer[8] = 0x88               // /  for sectors 1-15
-	trailer[9] = 0x40               // user byte
-	copy(trailer[10:16], newKey[:]) // KEY B = passkey-derived
+	// Access bytes for sectors 1-15: 0x7F 0x07 0x88 (C1=0,C2=1,C3=1 for trailer,
+	// C1=C2=C3=0 for data blocks) + 0x40 user/GPB byte.
+	// These are the NDEF standard access conditions.
+	const (
+		acB0 byte = 0x7F // trailer byte 6
+		acB1 byte = 0x07 // trailer byte 7
+		acB2 byte = 0x88 // trailer byte 8
+		acB3 byte = 0x40 // trailer byte 9 (user / GPB)
+	)
 
 	locked := 0
 	for sector := 1; sector < 16; sector++ {
-		trailerAddr := sector*4 + 3
 		sectorLocked := false
 
-		// Round 1: try KEY B (mode 4) — required on NDEF-formatted cards
-		for _, tryKey := range lockKeys {
-			if loadErr := h.Reader.LoadKey(4, sector, tryKey); loadErr != nil {
-				continue
-			}
-			if authErr := h.Reader.Authenticate(4, sector); authErr != nil {
-				log.Printf("[LOCK] sector %d KEY-B auth failed (%v), re-detecting", sector, authErr)
-				h.Reader.DetectCard(mode) //nolint:errcheck
-				continue
-			}
-			if writeErr := h.Reader.WriteBlock(trailerAddr, trailer); writeErr != nil {
-				log.Printf("[LOCK] sector %d trailer write (KEY-B) failed: %v", sector, writeErr)
-				continue
-			}
-			log.Printf("[LOCK] sector %d locked via KEY-B", sector)
-			sectorLocked = true
-			break
-		}
+		trailerAddr := sector*4 + 3
+		var trailerBlock [16]byte
+		copy(trailerBlock[0:6], newKey[:])
+		trailerBlock[6] = acB0
+		trailerBlock[7] = acB1
+		trailerBlock[8] = acB2
+		trailerBlock[9] = acB3
+		copy(trailerBlock[10:16], newKey[:])
 
-		// Round 2: try KEY A (userKeyMode) — works on factory-fresh cards
-		if !sectorLocked {
+		tryLock := func(keyMode int, modeLabel string) bool {
 			for _, tryKey := range lockKeys {
-				if loadErr := h.Reader.LoadKey(userKeyMode, sector, tryKey); loadErr != nil {
+				if loadErr := h.Reader.LoadKey(keyMode, sector, tryKey); loadErr != nil {
+					log.Printf("[LOCK] sector %d %s LoadKey failed: %v", sector, modeLabel, loadErr)
 					continue
 				}
-				if authErr := h.Reader.Authenticate(userKeyMode, sector); authErr != nil {
-					log.Printf("[LOCK] sector %d KEY-A auth failed (%v), re-detecting", sector, authErr)
+				if authErr := h.Reader.Authenticate(keyMode, sector); authErr != nil {
+					log.Printf("[LOCK] sector %d %s auth failed (%v), re-detecting", sector, modeLabel, authErr)
 					h.Reader.DetectCard(mode) //nolint:errcheck
 					continue
 				}
-				if writeErr := h.Reader.WriteBlock(trailerAddr, trailer); writeErr != nil {
-					log.Printf("[LOCK] sector %d trailer write (KEY-A) failed: %v", sector, writeErr)
-					continue
+				// Try dc_changeb3 first (the DLL's dedicated trailer-update function).
+				cbErr := h.Reader.ChangeBlock3(sector, newKey, acB0, acB1, acB2, acB3, 0, newKey)
+				if cbErr == nil {
+					log.Printf("[LOCK] sector %d locked via %s (dc_changeb3)", sector, modeLabel)
+					return true
 				}
-				log.Printf("[LOCK] sector %d locked via KEY-A", sector)
-				sectorLocked = true
-				break
+				log.Printf("[LOCK] sector %d dc_changeb3 failed (%v), falling back to dc_write", sector, cbErr)
+				// Fallback: raw dc_write on the trailer block. Works on factory-default
+				// cards where KEY A authentication allows direct trailer writes.
+				h.Reader.DetectCard(mode) //nolint:errcheck
+				if loadErr2 := h.Reader.LoadKey(keyMode, sector, tryKey); loadErr2 == nil {
+					if authErr2 := h.Reader.Authenticate(keyMode, sector); authErr2 == nil {
+						if writeErr := h.Reader.WriteBlock(trailerAddr, trailerBlock); writeErr == nil {
+							log.Printf("[LOCK] sector %d locked via %s (dc_write fallback)", sector, modeLabel)
+							return true
+						} else {
+							log.Printf("[LOCK] sector %d dc_write fallback also failed: %v â€” re-detecting", sector, writeErr)
+							h.Reader.DetectCard(mode) //nolint:errcheck
+						}
+					}
+				}
+				continue
 			}
+			return false
+		}
+
+		// Round 1: KEY B (mode 4) â€” required on NDEF-formatted cards where access bits
+		// only allow KEY B to write the sector trailer.
+		if tryLock(4, "KEY-B") {
+			sectorLocked = true
+		}
+
+		// Round 2: KEY A (userKeyMode) â€” works on factory-fresh cards where KEY A
+		// (mode 0/1/2) can write the sector trailer.
+		if !sectorLocked && tryLock(userKeyMode, "KEY-A") {
+			sectorLocked = true
 		}
 
 		if sectorLocked {
 			locked++
 		} else {
-			log.Printf("[LOCK] sector %d could not be locked", sector)
+			log.Printf("[LOCK] sector %d could not be locked (all keys exhausted in both rounds)", sector)
 		}
 	}
 	return locked
 }
 
-// WriteEncodedLockedMD5 godoc
+// unlockSectorTrailers resets all 15 data sector keys (1-15) back to the factory default (FFFFFFFFFFFF).
+// It authenticates using currentKey (the passkey-derived key) and then tries NDEF defaults as fallback.
+// Returns the number of sectors successfully unlocked (max 15).
+func unlockSectorTrailers(h *CardHandlers, mode int, currentKey [6]byte) int {
+	defaultKey, _ := reader.KeyFromHex("FFFFFFFFFFFF")
+	ndefDefaults := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
+	tryKeys := [][6]byte{currentKey}
+	for _, kh := range ndefDefaults {
+		k, _ := reader.KeyFromHex(kh)
+		tryKeys = append(tryKeys, k)
+	}
+
+	// Standard NDEF access conditions (same as lockSectorTrailers)
+	const (
+		acB0 byte = 0x7F
+		acB1 byte = 0x07
+		acB2 byte = 0x88
+		acB3 byte = 0x40
+	)
+
+	unlocked := 0
+	for sector := 1; sector < 16; sector++ {
+		sectorUnlocked := false
+
+		trailerAddr := sector*4 + 3
+		var trailerBlock [16]byte
+		copy(trailerBlock[0:6], defaultKey[:])
+		trailerBlock[6] = acB0
+		trailerBlock[7] = acB1
+		trailerBlock[8] = acB2
+		trailerBlock[9] = acB3
+		copy(trailerBlock[10:16], defaultKey[:])
+
+		tryUnlock := func(keyMode int, modeLabel string) bool {
+			for _, tryKey := range tryKeys {
+				if loadErr := h.Reader.LoadKey(keyMode, sector, tryKey); loadErr != nil {
+					log.Printf("[UNLOCK] sector %d %s LoadKey failed: %v", sector, modeLabel, loadErr)
+					continue
+				}
+				if authErr := h.Reader.Authenticate(keyMode, sector); authErr != nil {
+					log.Printf("[UNLOCK] sector %d %s auth failed (%v), re-detecting", sector, modeLabel, authErr)
+					h.Reader.DetectCard(mode) //nolint:errcheck
+					continue
+				}
+				cbErr := h.Reader.ChangeBlock3(sector, defaultKey, acB0, acB1, acB2, acB3, 0, defaultKey)
+				if cbErr == nil {
+					log.Printf("[UNLOCK] sector %d unlocked via %s (dc_changeb3)", sector, modeLabel)
+					return true
+				}
+				log.Printf("[UNLOCK] sector %d dc_changeb3 failed (%v), falling back to dc_write", sector, cbErr)
+				h.Reader.DetectCard(mode) //nolint:errcheck
+				if loadErr2 := h.Reader.LoadKey(keyMode, sector, tryKey); loadErr2 == nil {
+					if authErr2 := h.Reader.Authenticate(keyMode, sector); authErr2 == nil {
+						if writeErr := h.Reader.WriteBlock(trailerAddr, trailerBlock); writeErr == nil {
+							log.Printf("[UNLOCK] sector %d unlocked via %s (dc_write fallback)", sector, modeLabel)
+							return true
+						} else {
+							log.Printf("[UNLOCK] sector %d dc_write fallback also failed: %v â€” re-detecting", sector, writeErr)
+							h.Reader.DetectCard(mode) //nolint:errcheck
+						}
+					}
+				}
+			}
+			return false
+		}
+
+		if tryUnlock(4, "KEY-B") {
+			sectorUnlocked = true
+		}
+		if !sectorUnlocked && tryUnlock(0, "KEY-A") {
+			sectorUnlocked = true
+		}
+
+		if sectorUnlocked {
+			unlocked++
+		} else {
+			log.Printf("[UNLOCK] sector %d could not be unlocked (all keys exhausted)", sector)
+		}
+	}
+	return unlocked
+}
+
+// SetPassword godoc
 //
-//	@Summary		Encode, write, and lock card (MD5)
-//	@Description	Encodes JSON data as a Branca token (key=hex(MD5(snr_decimal))), writes it as an NDEF text record, then locks all 15 data sectors by replacing their Mifare keys with a key derived from the passkey (MD5(passkey)[0:6]). After locking, the normal write-encoded endpoint cannot write to the card because it cannot authenticate with the default NDEF keys. To overwrite a locked card, call this endpoint again with the same passkey.
-//	@Tags			MD5 Endpoints
+//	@Summary		Set write-protection password
+//	@Description	Changes all 15 sector keys to a key derived from the passkey (MD5(passkey)[0:6]). Card data is not modified. After this, writing to the card requires authenticating with the passkey. Use remove-password to restore the card to the default key.
+//	@Tags			Card Operations
 //	@Accept			json
 //	@Produce		json
-//	@Param			request	body		models.CardWriteEncodedLockedRequest					true	"Write + lock request (passkey required)"
-//	@Success		200		{object}	models.Response{data=models.CardWriteEncodedLockedResponse}
+//	@Param			request	body		models.CardSetPasswordRequest				true	"Set password request"
+//	@Success		200		{object}	models.Response{data=models.CardSetPasswordResponse}
 //	@Failure		400		{object}	models.DetailedErrorResponse
 //	@Failure		500		{object}	models.DetailedErrorResponse
-//	@Router			/api/v1/card/1/write-encoded-locked [post]
-func (h *CardHandlers) WriteEncodedLockedMD5(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/1/write-encoded-locked")
-	var req models.CardWriteEncodedLockedRequest
+//	@Router			/api/v1/card/set-password [post]
+func (h *CardHandlers) SetPassword(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/set-password")
+	if !h.requireReader(w) {
+		return
+	}
+	var req models.CardSetPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
 		return
 	}
-	if len(req.Data) == 0 || string(req.Data) == "null" {
-		respondError(w, "data field is required and must be a valid JSON value", http.StatusBadRequest)
-		return
-	}
 	if strings.TrimSpace(req.Passkey) == "" {
-		respondError(w, "passkey is required for locked write", http.StatusBadRequest)
+		respondError(w, "passkey is required", http.StatusBadRequest)
 		return
 	}
 
@@ -1478,12 +1255,9 @@ func (h *CardHandlers) WriteEncodedLockedMD5(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Derive 6-byte Mifare key from passkey: MD5(passkey)[0:6]
 	passkeyMifareKey, passkeyKeyHex := passkeyToMifareKey(req.Passkey)
-	log.Printf("[API] WriteEncodedLockedMD5: passkey → Mifare key %s", passkeyKeyHex)
+	log.Printf("[API] SetPassword: passkey â†’ Mifare key %s", passkeyKeyHex)
 
-	// Detect card → get SNR
-	log.Printf("[API] WriteEncodedLockedMD5: detecting card (mode=%d)...", req.Mode)
 	snr, err := h.Reader.DetectCard(req.Mode)
 	if err != nil {
 		diagErr := parseDLLError(err.Error(), "dc_request")
@@ -1495,188 +1269,55 @@ func (h *CardHandlers) WriteEncodedLockedMD5(w http.ResponseWriter, r *http.Requ
 		respondWithDiagnosticError(w, diagErr, statusCode)
 		return
 	}
-	log.Printf("[API] WriteEncodedLockedMD5: card detected SNR=%08X (%d)", snr, snr)
+	log.Printf("[API] SetPassword: card detected SNR=%08X (%d)", snr, snr)
 
-	// Derive Branca key from SNR decimal (MD5 method)
-	brancaKey := snrToBrancaKey(snr)
-	log.Printf("[API] WriteEncodedLockedMD5: SNR decimal=%d → branca key=%s", snr, brancaKey)
-
-	// Encode JSON data as Branca token
-	b := branca.NewBranca(brancaKey)
-	token, encErr := b.EncodeToString(string(req.Data))
-	if encErr != nil {
-		log.Printf("[API] WriteEncodedLockedMD5: Branca encode failed: %v", encErr)
-		respondWithError(w, "Branca encode failed", encErr.Error(), http.StatusInternalServerError, false)
-		return
-	}
-	log.Printf("[API] WriteEncodedLockedMD5: branca token len=%d: %.30s...", len(token), token)
-
-	// Build NDEF TLV payload
-	ndefTLV := buildNDEFText(token)
-	log.Printf("[API] WriteEncodedLockedMD5: NDEF TLV size=%d bytes", len(ndefTLV))
-
-	const maxNDEFBytes = 704
-	if len(ndefTLV) > maxNDEFBytes {
-		respondWithError(w, "Data too large",
-			fmt.Sprintf("NDEF payload is %d bytes; card capacity is %d bytes. Reduce the JSON payload size.", len(ndefTLV), maxNDEFBytes),
-			http.StatusBadRequest, false)
-		return
-	}
-
-	ndefPadded := make([]byte, maxNDEFBytes)
-	copy(ndefPadded, ndefTLV)
-
-	var ccBlock [16]byte
-	ccBlock[0] = 0xE1
-	ccBlock[1] = 0x10
-	ccBlock[2] = 0x6D
-	ccBlock[3] = 0x00
-
-	// Keys to try for data-block authentication (KEY A): passkey key first, then user key, then NDEF defaults
-	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
-	allKeys := [][6]byte{passkeyMifareKey, key}
-	for _, kh := range ndefKeyHexes {
-		k, _ := reader.KeyFromHex(kh)
-		allKeys = append(allKeys, k)
-	}
-
-	// ── Phase 1: write data blocks (identical to WriteEncodedMD5) ──────────────
-	blocksWritten := 0
-	ndefOffset := 0
-	failedSectors := []int{}
-
-	for sector := 1; sector < 16; sector++ {
-		block0 := sector * 4
-
-		authenticated := false
-		for keyIdx, tryKey := range allKeys {
-			log.Printf("[API] WriteEncodedLockedMD5: sector %d key[%d] — LoadKey+Auth", sector, keyIdx)
-			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
-				log.Printf("[API] WriteEncodedLockedMD5: sector %d LoadKey failed: %v", sector, loadErr)
-				continue
-			}
-			if authErr := h.Reader.Authenticate(req.KeyMode, sector); authErr != nil {
-				log.Printf("[API] WriteEncodedLockedMD5: sector %d Auth failed, re-detecting: %v", sector, authErr)
-				h.Reader.DetectCard(req.Mode) //nolint:errcheck
-				continue
-			}
-			authenticated = true
-			log.Printf("[API] WriteEncodedLockedMD5: sector %d authenticated with key[%d]", sector, keyIdx)
-			break
-		}
-
-		if !authenticated {
-			log.Printf("[API] WriteEncodedLockedMD5: sector %d all keys failed, skipping", sector)
-			failedSectors = append(failedSectors, sector)
-			blocksToSkip := 3
-			if sector == 1 {
-				blocksToSkip = 2
-			}
-			ndefOffset += blocksToSkip * 16
-			continue
-		}
-
-		startBlockInSector := 0
-		if sector == 1 {
-			if writeErr := h.Reader.WriteBlock(block0, ccBlock); writeErr != nil {
-				log.Printf("[API] WriteEncodedLockedMD5: CC write to block %d failed: %v", block0, writeErr)
-			} else {
-				log.Printf("[API] WriteEncodedLockedMD5: CC written to block %d", block0)
-			}
-			startBlockInSector = 1
-		}
-
-		for blockInSector := startBlockInSector; blockInSector < 3; blockInSector++ {
-			blockAddr := block0 + blockInSector
-			var blockData [16]byte
-			if ndefOffset < len(ndefPadded) {
-				copy(blockData[:], ndefPadded[ndefOffset:])
-			}
-			ndefOffset += 16
-
-			if writeErr := h.Reader.WriteBlock(blockAddr, blockData); writeErr != nil {
-				log.Printf("[API] WriteEncodedLockedMD5: WriteBlock %d failed: %v", blockAddr, writeErr)
-			} else {
-				log.Printf("[API] WriteEncodedLockedMD5: block %d written", blockAddr)
-				blocksWritten++
-			}
-		}
-	}
-	h.Reader.Halt()
-
-	// ── Phase 2: lock sector trailers with passkey-derived key ─────────────────
-	log.Printf("[API] WriteEncodedLockedMD5: starting lock phase, passkey key=%s", passkeyKeyHex)
-	if _, redetectErr := h.Reader.DetectCard(req.Mode); redetectErr != nil {
-		log.Printf("[API] WriteEncodedLockedMD5: re-detect for lock phase failed: %v", redetectErr)
-	}
 	sectorsLocked := lockSectorTrailers(h, req.Mode, req.KeyMode, key, passkeyMifareKey)
-	h.Reader.Halt()
-	log.Printf("[API] WriteEncodedLockedMD5: locked %d/15 sectors", sectorsLocked)
-
-	writeSuccess := len(failedSectors) == 0
-	locked := sectorsLocked == 15
-	msg := fmt.Sprintf("Card encoded, written, and locked. %d blocks written, %d/15 sectors locked.", blocksWritten, sectorsLocked)
-	if !writeSuccess {
-		msg = fmt.Sprintf("Write completed with errors. %d blocks written (failed sectors: %v), %d/15 sectors locked.", blocksWritten, failedSectors, sectorsLocked)
-	}
+	log.Printf("[API] SetPassword: %d/15 sectors locked", sectorsLocked)
 
 	resp := models.Response{
-		Success: writeSuccess,
-		Message: msg,
-		Data: models.CardWriteEncodedLockedResponse{
+		Success: true,
+		Message: fmt.Sprintf("Password set. %d/15 sectors write-protected.", sectorsLocked),
+		Data: models.CardSetPasswordResponse{
 			SNRHex:        fmt.Sprintf("0x%08X", snr),
 			SNRDecimal:    snr,
-			BrancaToken:   token,
-			BytesWritten:  blocksWritten * 16,
-			BlocksWritten: blocksWritten,
 			SectorsLocked: sectorsLocked,
-			Locked:        locked,
+			Locked:        sectorsLocked == 15,
 		},
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
 
-// WriteEncodedLockedSHA godoc
+// RemovePassword godoc
 //
-//	@Summary		Encode, write, and lock card (SHA256)
-//	@Description	Encodes JSON data as a Branca token (key=SHA256(snr_decimal+BRANCA_SALT)), writes it as an NDEF text record, then locks all 15 data sectors by replacing their Mifare keys with a key derived from the passkey (MD5(passkey)[0:6]). After locking, the normal write-encoded endpoint cannot write to the card because it cannot authenticate with the default NDEF keys. To overwrite a locked card, call this endpoint again with the same passkey.
-//	@Tags			SHA256 Endpoints
+//	@Summary		Remove write-protection password
+//	@Description	Resets all 15 sector keys back to the factory default (FFFFFFFFFFFF) by authenticating with the passkey-derived key. After this, the card can be written to without a password.
+//	@Tags			Card Operations
 //	@Accept			json
 //	@Produce		json
-//	@Param			request	body		models.CardWriteEncodedLockedRequest					true	"Write + lock request (passkey required)"
-//	@Success		200		{object}	models.Response{data=models.CardWriteEncodedLockedResponse}
+//	@Param			request	body		models.CardRemovePasswordRequest				true	"Remove password request"
+//	@Success		200		{object}	models.Response{data=models.CardRemovePasswordResponse}
 //	@Failure		400		{object}	models.DetailedErrorResponse
 //	@Failure		500		{object}	models.DetailedErrorResponse
-//	@Router			/api/v1/card/2/write-encoded-locked [post]
-func (h *CardHandlers) WriteEncodedLockedSHA(w http.ResponseWriter, r *http.Request) {
-	log.Println("[API] POST /api/v1/card/2/write-encoded-locked")
-	var req models.CardWriteEncodedLockedRequest
+//	@Router			/api/v1/card/remove-password [post]
+func (h *CardHandlers) RemovePassword(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/remove-password")
+	if !h.requireReader(w) {
+		return
+	}
+	var req models.CardRemovePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
 		return
 	}
-	if len(req.Data) == 0 || string(req.Data) == "null" {
-		respondError(w, "data field is required and must be a valid JSON value", http.StatusBadRequest)
-		return
-	}
 	if strings.TrimSpace(req.Passkey) == "" {
-		respondError(w, "passkey is required for locked write", http.StatusBadRequest)
+		respondError(w, "passkey is required", http.StatusBadRequest)
 		return
 	}
 
-	key, err := reader.KeyFromHex(req.Key)
-	if err != nil {
-		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Derive 6-byte Mifare key from passkey: MD5(passkey)[0:6]
 	passkeyMifareKey, passkeyKeyHex := passkeyToMifareKey(req.Passkey)
-	log.Printf("[API] WriteEncodedLockedSHA: passkey → Mifare key %s", passkeyKeyHex)
+	log.Printf("[API] RemovePassword: passkey â†’ Mifare key %s", passkeyKeyHex)
 
-	// Detect card → get SNR
-	log.Printf("[API] WriteEncodedLockedSHA: detecting card (mode=%d)...", req.Mode)
 	snr, err := h.Reader.DetectCard(req.Mode)
 	if err != nil {
 		diagErr := parseDLLError(err.Error(), "dc_request")
@@ -1688,142 +1329,19 @@ func (h *CardHandlers) WriteEncodedLockedSHA(w http.ResponseWriter, r *http.Requ
 		respondWithDiagnosticError(w, diagErr, statusCode)
 		return
 	}
-	log.Printf("[API] WriteEncodedLockedSHA: card detected SNR=%08X (%d)", snr, snr)
+	log.Printf("[API] RemovePassword: card detected SNR=%08X (%d)", snr, snr)
 
-	// Derive Branca key from SNR decimal using SHA256 + salt
-	brancaKey := snrToBrancaKeySHA(snr, h.Salt)
-	log.Printf("[API] WriteEncodedLockedSHA: SNR decimal=%d → branca key derived via SHA256+salt", snr)
-
-	// Encode JSON data as Branca token
-	b := branca.NewBranca(brancaKey)
-	token, encErr := b.EncodeToString(string(req.Data))
-	if encErr != nil {
-		log.Printf("[API] WriteEncodedLockedSHA: Branca encode failed: %v", encErr)
-		respondWithError(w, "Branca encode failed", encErr.Error(), http.StatusInternalServerError, false)
-		return
-	}
-	log.Printf("[API] WriteEncodedLockedSHA: branca token len=%d: %.30s...", len(token), token)
-
-	// Build NDEF TLV payload
-	ndefTLV := buildNDEFText(token)
-	log.Printf("[API] WriteEncodedLockedSHA: NDEF TLV size=%d bytes", len(ndefTLV))
-
-	const maxNDEFBytes = 704
-	if len(ndefTLV) > maxNDEFBytes {
-		respondWithError(w, "Data too large",
-			fmt.Sprintf("NDEF payload is %d bytes; card capacity is %d bytes. Reduce the JSON payload size.", len(ndefTLV), maxNDEFBytes),
-			http.StatusBadRequest, false)
-		return
-	}
-
-	ndefPadded := make([]byte, maxNDEFBytes)
-	copy(ndefPadded, ndefTLV)
-
-	var ccBlock [16]byte
-	ccBlock[0] = 0xE1
-	ccBlock[1] = 0x10
-	ccBlock[2] = 0x6D
-	ccBlock[3] = 0x00
-
-	// Keys to try for data-block authentication (KEY A): passkey key first, then user key, then NDEF defaults
-	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
-	allKeys := [][6]byte{passkeyMifareKey, key}
-	for _, kh := range ndefKeyHexes {
-		k, _ := reader.KeyFromHex(kh)
-		allKeys = append(allKeys, k)
-	}
-
-	// ── Phase 1: write data blocks (identical to WriteEncodedSHA) ──────────────
-	blocksWritten := 0
-	ndefOffset := 0
-	failedSectors := []int{}
-
-	for sector := 1; sector < 16; sector++ {
-		block0 := sector * 4
-
-		authenticated := false
-		for keyIdx, tryKey := range allKeys {
-			log.Printf("[API] WriteEncodedLockedSHA: sector %d key[%d] — LoadKey+Auth", sector, keyIdx)
-			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
-				log.Printf("[API] WriteEncodedLockedSHA: sector %d LoadKey failed: %v", sector, loadErr)
-				continue
-			}
-			if authErr := h.Reader.Authenticate(req.KeyMode, sector); authErr != nil {
-				log.Printf("[API] WriteEncodedLockedSHA: sector %d Auth failed, re-detecting: %v", sector, authErr)
-				h.Reader.DetectCard(req.Mode) //nolint:errcheck
-				continue
-			}
-			authenticated = true
-			log.Printf("[API] WriteEncodedLockedSHA: sector %d authenticated with key[%d]", sector, keyIdx)
-			break
-		}
-
-		if !authenticated {
-			log.Printf("[API] WriteEncodedLockedSHA: sector %d all keys failed, skipping", sector)
-			failedSectors = append(failedSectors, sector)
-			blocksToSkip := 3
-			if sector == 1 {
-				blocksToSkip = 2
-			}
-			ndefOffset += blocksToSkip * 16
-			continue
-		}
-
-		startBlockInSector := 0
-		if sector == 1 {
-			if writeErr := h.Reader.WriteBlock(block0, ccBlock); writeErr != nil {
-				log.Printf("[API] WriteEncodedLockedSHA: CC write to block %d failed: %v", block0, writeErr)
-			} else {
-				log.Printf("[API] WriteEncodedLockedSHA: CC written to block %d", block0)
-			}
-			startBlockInSector = 1
-		}
-
-		for blockInSector := startBlockInSector; blockInSector < 3; blockInSector++ {
-			blockAddr := block0 + blockInSector
-			var blockData [16]byte
-			if ndefOffset < len(ndefPadded) {
-				copy(blockData[:], ndefPadded[ndefOffset:])
-			}
-			ndefOffset += 16
-
-			if writeErr := h.Reader.WriteBlock(blockAddr, blockData); writeErr != nil {
-				log.Printf("[API] WriteEncodedLockedSHA: WriteBlock %d failed: %v", blockAddr, writeErr)
-			} else {
-				log.Printf("[API] WriteEncodedLockedSHA: block %d written", blockAddr)
-				blocksWritten++
-			}
-		}
-	}
-	h.Reader.Halt()
-
-	// ── Phase 2: lock sector trailers with passkey-derived key ─────────────────
-	log.Printf("[API] WriteEncodedLockedSHA: starting lock phase, passkey key=%s", passkeyKeyHex)
-	if _, redetectErr := h.Reader.DetectCard(req.Mode); redetectErr != nil {
-		log.Printf("[API] WriteEncodedLockedSHA: re-detect for lock phase failed: %v", redetectErr)
-	}
-	sectorsLocked := lockSectorTrailers(h, req.Mode, req.KeyMode, key, passkeyMifareKey)
-	h.Reader.Halt()
-	log.Printf("[API] WriteEncodedLockedSHA: locked %d/15 sectors", sectorsLocked)
-
-	writeSuccess := len(failedSectors) == 0
-	locked := sectorsLocked == 15
-	msg := fmt.Sprintf("Card encoded, written, and locked. %d blocks written, %d/15 sectors locked.", blocksWritten, sectorsLocked)
-	if !writeSuccess {
-		msg = fmt.Sprintf("Write completed with errors. %d blocks written (failed sectors: %v), %d/15 sectors locked.", blocksWritten, failedSectors, sectorsLocked)
-	}
+	sectorsUnlocked := unlockSectorTrailers(h, req.Mode, passkeyMifareKey)
+	log.Printf("[API] RemovePassword: %d/15 sectors unlocked", sectorsUnlocked)
 
 	resp := models.Response{
-		Success: writeSuccess,
-		Message: msg,
-		Data: models.CardWriteEncodedLockedResponse{
-			SNRHex:        fmt.Sprintf("0x%08X", snr),
-			SNRDecimal:    snr,
-			BrancaToken:   token,
-			BytesWritten:  blocksWritten * 16,
-			BlocksWritten: blocksWritten,
-			SectorsLocked: sectorsLocked,
-			Locked:        locked,
+		Success: true,
+		Message: fmt.Sprintf("Password removed. %d/15 sectors restored to default key.", sectorsUnlocked),
+		Data: models.CardRemovePasswordResponse{
+			SNRHex:          fmt.Sprintf("0x%08X", snr),
+			SNRDecimal:      snr,
+			SectorsUnlocked: sectorsUnlocked,
+			Unlocked:        sectorsUnlocked == 15,
 		},
 	}
 	w.Header().Set("Content-Type", "application/json")

@@ -67,64 +67,6 @@
                 }
             }
         },
-        "/api/v1/card/1/read-decoded-locked": {
-            "post": {
-                "description": "Reads all blocks from a passkey-locked card, derives the Mifare sector key from the passkey (MD5(passkey)[0:6]), authenticates, extracts the NDEF Branca token, and decodes it using a key derived from hex(MD5(snr_decimal)). Use this endpoint instead of read-decoded when the card was written with write-encoded-locked.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "MD5 Endpoints"
-                ],
-                "summary": "Read and decode locked card (MD5)",
-                "parameters": [
-                    {
-                        "description": "Read request with passkey",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.CardReadDecodedLockedRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/models.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/models.CardReadDecodedResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/models.DetailedErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/models.DetailedErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/card/1/write-encoded": {
             "post": {
                 "description": "Encodes JSON data as a Branca token using key=hex(MD5(snr_decimal)) and writes it as an NDEF text record to the card",
@@ -183,64 +125,6 @@
                 }
             }
         },
-        "/api/v1/card/1/write-encoded-locked": {
-            "post": {
-                "description": "Encodes JSON data as a Branca token (key=hex(MD5(snr_decimal))), writes it as an NDEF text record, then locks all 15 data sectors by replacing their Mifare keys with a key derived from the passkey (MD5(passkey)[0:6]). After locking, the normal write-encoded endpoint cannot write to the card because it cannot authenticate with the default NDEF keys. To overwrite a locked card, call this endpoint again with the same passkey.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "MD5 Endpoints"
-                ],
-                "summary": "Encode, write, and lock card (MD5)",
-                "parameters": [
-                    {
-                        "description": "Write + lock request (passkey required)",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.CardWriteEncodedLockedRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/models.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/models.CardWriteEncodedLockedResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/models.DetailedErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/models.DetailedErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/card/2/read-decoded": {
             "post": {
                 "description": "Reads all card blocks, extracts the NDEF Branca token, and decodes it using a key derived from SHA256(snr_decimal + BRANCA_SALT)",
@@ -262,64 +146,6 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/models.CardReadDecodedRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/models.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/models.CardReadDecodedResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/models.DetailedErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/models.DetailedErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/card/2/read-decoded-locked": {
-            "post": {
-                "description": "Reads all blocks from a passkey-locked card, derives the Mifare sector key from the passkey (MD5(passkey)[0:6]), authenticates, extracts the NDEF Branca token, and decodes it using a key derived from SHA256(snr_decimal+BRANCA_SALT). Use this endpoint instead of read-decoded when the card was written with write-encoded-locked (SHA256 variant).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SHA256 Endpoints"
-                ],
-                "summary": "Read and decode locked card (SHA256)",
-                "parameters": [
-                    {
-                        "description": "Read request with passkey",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.CardReadDecodedLockedRequest"
                         }
                     }
                 ],
@@ -415,64 +241,6 @@
                 }
             }
         },
-        "/api/v1/card/2/write-encoded-locked": {
-            "post": {
-                "description": "Encodes JSON data as a Branca token (key=SHA256(snr_decimal+BRANCA_SALT)), writes it as an NDEF text record, then locks all 15 data sectors by replacing their Mifare keys with a key derived from the passkey (MD5(passkey)[0:6]). After locking, the normal write-encoded endpoint cannot write to the card because it cannot authenticate with the default NDEF keys. To overwrite a locked card, call this endpoint again with the same passkey.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SHA256 Endpoints"
-                ],
-                "summary": "Encode, write, and lock card (SHA256)",
-                "parameters": [
-                    {
-                        "description": "Write + lock request (passkey required)",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.CardWriteEncodedLockedRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/models.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/models.CardWriteEncodedLockedResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/models.DetailedErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/models.DetailedErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/card/detect": {
             "post": {
                 "description": "Detects an NFC card in the RF field and returns its serial number",
@@ -546,6 +314,122 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/card/remove-password": {
+            "post": {
+                "description": "Resets all 15 sector keys back to the factory default (FFFFFFFFFFFF) by authenticating with the passkey-derived key. After this, the card can be written to without a password.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Card Operations"
+                ],
+                "summary": "Remove write-protection password",
+                "parameters": [
+                    {
+                        "description": "Remove password request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CardRemovePasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.CardRemovePasswordResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/card/set-password": {
+            "post": {
+                "description": "Changes all 15 sector keys to a key derived from the passkey (MD5(passkey)[0:6]). Card data is not modified. After this, writing to the card requires authenticating with the passkey. Use remove-password to restore the card to the default key.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Card Operations"
+                ],
+                "summary": "Set write-protection password",
+                "parameters": [
+                    {
+                        "description": "Set password request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CardSetPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.CardSetPasswordResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
                         }
                     },
                     "500": {
@@ -1032,31 +916,6 @@
                 }
             }
         },
-        "models.CardReadDecodedLockedRequest": {
-            "type": "object",
-            "properties": {
-                "key": {
-                    "description": "Fallback sector key (hex, 12 chars); tried after the passkey-derived key",
-                    "type": "string",
-                    "example": "FFFFFFFFFFFF"
-                },
-                "key_mode": {
-                    "description": "0-2 for KEY A, 4-6 for KEY B",
-                    "type": "integer",
-                    "example": 0
-                },
-                "mode": {
-                    "description": "0 = IDLE, 1 = ALL",
-                    "type": "integer",
-                    "example": 0
-                },
-                "passkey": {
-                    "description": "Passkey used when the card was locked; required",
-                    "type": "string",
-                    "example": "mySecretPass"
-                }
-            }
-        },
         "models.CardReadDecodedRequest": {
             "type": "object",
             "properties": {
@@ -1094,15 +953,45 @@
                 }
             }
         },
-        "models.CardWriteEncodedLockedRequest": {
+        "models.CardRemovePasswordRequest": {
             "type": "object",
             "properties": {
-                "data": {
-                    "description": "Any JSON value to encode into the card",
-                    "type": "object"
+                "mode": {
+                    "description": "0 = IDLE, 1 = ALL",
+                    "type": "integer",
+                    "example": 0
                 },
+                "passkey": {
+                    "description": "Current password used when the card was locked",
+                    "type": "string",
+                    "example": "mySecretPass"
+                }
+            }
+        },
+        "models.CardRemovePasswordResponse": {
+            "type": "object",
+            "properties": {
+                "sectors_unlocked": {
+                    "description": "number of sectors restored to default key",
+                    "type": "integer"
+                },
+                "snr_decimal": {
+                    "type": "integer"
+                },
+                "snr_hex": {
+                    "type": "string"
+                },
+                "unlocked": {
+                    "description": "true when all 15 sectors were restored",
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.CardSetPasswordRequest": {
+            "type": "object",
+            "properties": {
                 "key": {
-                    "description": "Current sector key (hex, 12 chars = 6 bytes)",
+                    "description": "Current sector key (hex, 12 chars); tried during auth",
                     "type": "string",
                     "example": "FFFFFFFFFFFF"
                 },
@@ -1117,28 +1006,21 @@
                     "example": 0
                 },
                 "passkey": {
-                    "description": "Lock passkey — required; derives the new sector key",
+                    "description": "New password; derives the sector key via MD5(passkey)[0:6]",
                     "type": "string",
                     "example": "mySecretPass"
                 }
             }
         },
-        "models.CardWriteEncodedLockedResponse": {
+        "models.CardSetPasswordResponse": {
             "type": "object",
             "properties": {
-                "blocks_written": {
-                    "type": "integer"
-                },
-                "branca_token": {
-                    "type": "string"
-                },
-                "bytes_written": {
-                    "type": "integer"
-                },
                 "locked": {
+                    "description": "true when all 15 sectors were locked",
                     "type": "boolean"
                 },
                 "sectors_locked": {
+                    "description": "number of sectors whose keys were changed (max 15)",
                     "type": "integer"
                 },
                 "snr_decimal": {

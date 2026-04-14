@@ -49,6 +49,7 @@ func NewDLLLoader(dllName string) (*DLLLoader, error) {
 		"dc_decrement",
 		"dc_readval",
 		"dc_authentication_pass",
+		"dc_changeb3",
 	}
 
 	for _, name := range procNames {
