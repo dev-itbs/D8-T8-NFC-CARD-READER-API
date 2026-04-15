@@ -641,9 +641,9 @@ func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 	ndefTLV := buildNDEFText(token)
 	log.Printf("[API] WriteEncoded: NDEF TLV size=%d bytes", len(ndefTLV))
 
-	// Sector 1 block 0 (block 4) = Capability Container; blocks 5,6 = NDEF data (32 bytes).
-	// Sectors 2-15: 3 data blocks each = 42 Ã— 16 = 672 bytes. Total NDEF data: 704 bytes.
-	const maxNDEFBytes = 704
+	// Sectors 1-15: 3 data blocks each = 45 * 16 = 720 bytes total NDEF area.
+	// NDEF TLV is written starting at block 4 (sector 1, block 0), matching NFC Tools layout.
+	const maxNDEFBytes = 720
 	if len(ndefTLV) > maxNDEFBytes {
 		respondWithError(w, "Data too large",
 			fmt.Sprintf("NDEF payload is %d bytes; card capacity is %d bytes. Reduce the JSON payload size.", len(ndefTLV), maxNDEFBytes),
@@ -651,16 +651,9 @@ func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pad NDEF TLV to fill all 704 bytes (zero-fill remaining blocks)
+	// Pad NDEF TLV to fill all 720 bytes (zero-fill remaining blocks)
 	ndefPadded := make([]byte, maxNDEFBytes)
 	copy(ndefPadded, ndefTLV)
-
-	// Capability Container for block 4: NDEF magic E1, version 1.0, size, read/write
-	var ccBlock [16]byte
-	ccBlock[0] = 0xE1
-	ccBlock[1] = 0x10
-	ccBlock[2] = 0x6D // 109 Ã— 8 = 872 bytes declared capacity
-	ccBlock[3] = 0x00
 
 	// Try the user-provided key plus well-known NDEF keys (same strategy as ReadDecoded)
 	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
@@ -704,28 +697,13 @@ func (h *CardHandlers) WriteEncodedMD5(w http.ResponseWriter, r *http.Request) {
 		if !authenticated {
 			log.Printf("[API] WriteEncoded: sector %d all keys failed, skipping", sector)
 			failedSectors = append(failedSectors, sector)
-			// Advance offset past this sector's data blocks
-			blocksToSkip := 3
-			if sector == 1 {
-				blocksToSkip = 2 // block 4 = CC, NDEF in blocks 5,6
-			}
-			ndefOffset += blocksToSkip * 16
+			ndefOffset += 3 * 16
 			continue
 		}
 
-		// Sector 1: write CC to block 4, NDEF data to blocks 5 and 6
-		// Sectors 2-15: write NDEF data to blocks 0, 1, 2 (skip trailer block 3)
-		startBlockInSector := 0
-		if sector == 1 {
-			if writeErr := h.Reader.WriteBlock(block0, ccBlock); writeErr != nil {
-				log.Printf("[API] WriteEncoded: CC write to block %d failed: %v", block0, writeErr)
-			} else {
-				log.Printf("[API] WriteEncoded: CC written to block %d", block0)
-			}
-			startBlockInSector = 1 // NDEF starts at block 5
-		}
-
-		for blockInSector := startBlockInSector; blockInSector < 3; blockInSector++ {
+		// Write NDEF data to blocks 0, 1, 2 of each sector (skip trailer block 3).
+		// Sector 1 block 0 (block 4) holds the start of the NDEF TLV, matching NFC Tools layout.
+		for blockInSector := 0; blockInSector < 3; blockInSector++ {
 			blockAddr := block0 + blockInSector
 			var blockData [16]byte
 			if ndefOffset < len(ndefPadded) {
@@ -1006,7 +984,7 @@ func (h *CardHandlers) WriteEncodedSHA(w http.ResponseWriter, r *http.Request) {
 	ndefTLV := buildNDEFText(token)
 	log.Printf("[API] WriteEncodedSHA: NDEF TLV size=%d bytes", len(ndefTLV))
 
-	const maxNDEFBytes = 704
+	const maxNDEFBytes = 720
 	if len(ndefTLV) > maxNDEFBytes {
 		respondWithError(w, "Data too large",
 			fmt.Sprintf("NDEF payload is %d bytes; card capacity is %d bytes. Reduce the JSON payload size.", len(ndefTLV), maxNDEFBytes),
@@ -1016,12 +994,6 @@ func (h *CardHandlers) WriteEncodedSHA(w http.ResponseWriter, r *http.Request) {
 
 	ndefPadded := make([]byte, maxNDEFBytes)
 	copy(ndefPadded, ndefTLV)
-
-	var ccBlock [16]byte
-	ccBlock[0] = 0xE1
-	ccBlock[1] = 0x10
-	ccBlock[2] = 0x6D
-	ccBlock[3] = 0x00
 
 	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
 	allKeys := [][6]byte{key}
@@ -1063,25 +1035,11 @@ func (h *CardHandlers) WriteEncodedSHA(w http.ResponseWriter, r *http.Request) {
 		if !authenticated {
 			log.Printf("[API] WriteEncodedSHA: sector %d all keys failed, skipping", sector)
 			failedSectors = append(failedSectors, sector)
-			blocksToSkip := 3
-			if sector == 1 {
-				blocksToSkip = 2
-			}
-			ndefOffset += blocksToSkip * 16
+			ndefOffset += 3 * 16
 			continue
 		}
 
-		startBlockInSector := 0
-		if sector == 1 {
-			if writeErr := h.Reader.WriteBlock(block0, ccBlock); writeErr != nil {
-				log.Printf("[API] WriteEncodedSHA: CC write to block %d failed: %v", block0, writeErr)
-			} else {
-				log.Printf("[API] WriteEncodedSHA: CC written to block %d", block0)
-			}
-			startBlockInSector = 1
-		}
-
-		for blockInSector := startBlockInSector; blockInSector < 3; blockInSector++ {
+		for blockInSector := 0; blockInSector < 3; blockInSector++ {
 			blockAddr := block0 + blockInSector
 			var blockData [16]byte
 			if ndefOffset < len(ndefPadded) {
@@ -1439,6 +1397,243 @@ func (h *CardHandlers) RemovePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// ReadNDEF godoc
+//
+//	@Summary		Read raw NDEF text from card
+//	@Description	Reads all card blocks and returns the raw NDEF text record content without any decryption. Works regardless of whether the card was written with MD5 or SHA256 encoding.
+//	@Tags			Card Operations
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.CardReadDecodedRequest					true	"Read request"
+//	@Success		200		{object}	models.Response{data=models.CardReadNDEFResponse}
+//	@Failure		400		{object}	models.DetailedErrorResponse
+//	@Failure		422		{object}	models.DetailedErrorResponse
+//	@Failure		500		{object}	models.DetailedErrorResponse
+//	@Router			/api/v1/card/read-ndef [post]
+func (h *CardHandlers) ReadNDEF(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/read-ndef")
+	if !h.requireReader(w) {
+		return
+	}
+	var req models.CardReadDecodedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
+		return
+	}
+
+	key, err := reader.KeyFromHex(req.Key)
+	if err != nil {
+		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[API] ReadNDEF: detecting card (mode=%d)...", req.Mode)
+	snr, err := h.Reader.DetectCard(req.Mode)
+	if err != nil {
+		diagErr := parseDLLError(err.Error(), "dc_request")
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "no card detected") || strings.Contains(err.Error(), "no card present") {
+			statusCode = http.StatusNotFound
+			diagErr.Suggestion = "No card detected. Place card on reader."
+		}
+		respondWithDiagnosticError(w, diagErr, statusCode)
+		return
+	}
+	log.Printf("[API] ReadNDEF: card detected SNR=%08X (%d)", snr, snr)
+
+	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
+	allKeys := [][6]byte{key}
+	for _, kh := range ndefKeyHexes {
+		k, _ := reader.KeyFromHex(kh)
+		allKeys = append(allKeys, k)
+	}
+
+	rawBytes := make([]byte, 0, 1024)
+	for sector := 0; sector < 16; sector++ {
+		block0 := sector * 4
+
+		authenticated := false
+		var block0Data [16]byte
+		for keyIdx, tryKey := range allKeys {
+			log.Printf("[API] ReadNDEF: sector %d key[%d] — LoadKey+Auth", sector, keyIdx)
+			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
+				continue
+			}
+			if authErr := h.Reader.Authenticate(req.KeyMode, sector); authErr != nil {
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
+			data, readErr := h.Reader.ReadBlock(block0)
+			if readErr != nil {
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
+			authenticated = true
+			block0Data = data
+			log.Printf("[API] ReadNDEF: sector %d authenticated + verified with key[%d]", sector, keyIdx)
+			break
+		}
+
+		blocksToRead := 4
+		if sector > 0 {
+			blocksToRead = 3
+		}
+
+		if !authenticated {
+			rawBytes = append(rawBytes, make([]byte, blocksToRead*16)...)
+			continue
+		}
+
+		rawBytes = append(rawBytes, block0Data[:]...)
+		for blockInSector := 1; blockInSector < blocksToRead; blockInSector++ {
+			data, readErr := h.Reader.ReadBlock(block0 + blockInSector)
+			if readErr != nil {
+				rawBytes = append(rawBytes, make([]byte, 16)...)
+			} else {
+				rawBytes = append(rawBytes, data[:]...)
+			}
+		}
+	}
+	h.Reader.Halt()
+
+	text := extractNDEFText(rawBytes)
+	if text == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		json.NewEncoder(w).Encode(models.Response{
+			Success: false,
+			Message: "No NDEF text record found on card",
+		})
+		return
+	}
+	log.Printf("[API] ReadNDEF: extracted text len=%d", len(text))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.Response{
+		Success: true,
+		Message: "NDEF text read successfully",
+		Data: models.CardReadNDEFResponse{
+			SNRHex:     fmt.Sprintf("0x%08X", snr),
+			SNRDecimal: snr,
+			Text:       text,
+		},
+	})
+}
+
+// FormatCard godoc
+//
+//	@Summary		Format (erase) card NDEF data
+//	@Description	Erases all NDEF data by writing zeros to data blocks in sectors 1-15. Sector trailers (keys/access bits) are not changed. Equivalent to NFC Tools' format function.
+//	@Tags			Card Operations
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.CardReadDecodedRequest					true	"Format request"
+//	@Success		200		{object}	models.Response{data=models.CardFormatResponse}
+//	@Failure		400		{object}	models.DetailedErrorResponse
+//	@Failure		500		{object}	models.DetailedErrorResponse
+//	@Router			/api/v1/card/format [post]
+func (h *CardHandlers) FormatCard(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] POST /api/v1/card/format")
+	if !h.requireReader(w) {
+		return
+	}
+	var req models.CardReadDecodedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, "Invalid request body", "Invalid JSON format", http.StatusBadRequest, false)
+		return
+	}
+
+	key, err := reader.KeyFromHex(req.Key)
+	if err != nil {
+		respondError(w, "Invalid key: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[API] FormatCard: detecting card (mode=%d)...", req.Mode)
+	snr, err := h.Reader.DetectCard(req.Mode)
+	if err != nil {
+		diagErr := parseDLLError(err.Error(), "dc_request")
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "no card detected") || strings.Contains(err.Error(), "no card present") {
+			statusCode = http.StatusNotFound
+			diagErr.Suggestion = "No card detected. Place card on reader."
+		}
+		respondWithDiagnosticError(w, diagErr, statusCode)
+		return
+	}
+	log.Printf("[API] FormatCard: card detected SNR=%08X (%d)", snr, snr)
+
+	ndefKeyHexes := []string{"D3F7D3F7D3F7", "A0A1A2A3A4A5", "FFFFFFFFFFFF"}
+	allKeys := [][6]byte{key}
+	for _, kh := range ndefKeyHexes {
+		k, _ := reader.KeyFromHex(kh)
+		allKeys = append(allKeys, k)
+	}
+
+	var zeroBlock [16]byte
+	blocksErased := 0
+	failedSectors := []int{}
+
+	for sector := 1; sector < 16; sector++ {
+		block0 := sector * 4
+
+		authenticated := false
+		for keyIdx, tryKey := range allKeys {
+			log.Printf("[API] FormatCard: sector %d key[%d] — LoadKey+Auth", sector, keyIdx)
+			if loadErr := h.Reader.LoadKey(req.KeyMode, sector, tryKey); loadErr != nil {
+				continue
+			}
+			if authErr := h.Reader.Authenticate(req.KeyMode, sector); authErr != nil {
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
+			if _, readErr := h.Reader.ReadBlock(block0); readErr != nil {
+				h.Reader.DetectCard(req.Mode) //nolint:errcheck
+				continue
+			}
+			authenticated = true
+			log.Printf("[API] FormatCard: sector %d authenticated with key[%d]", sector, keyIdx)
+			break
+		}
+
+		if !authenticated {
+			log.Printf("[API] FormatCard: sector %d all keys failed, skipping", sector)
+			failedSectors = append(failedSectors, sector)
+			continue
+		}
+
+		for blockInSector := 0; blockInSector < 3; blockInSector++ {
+			blockAddr := block0 + blockInSector
+			if writeErr := h.Reader.WriteBlock(blockAddr, zeroBlock); writeErr != nil {
+				log.Printf("[API] FormatCard: WriteBlock %d failed: %v", blockAddr, writeErr)
+			} else {
+				log.Printf("[API] FormatCard: block %d erased", blockAddr)
+				blocksErased++
+			}
+		}
+	}
+
+	h.Reader.Halt()
+
+	success := len(failedSectors) == 0
+	msg := fmt.Sprintf("Card formatted successfully. %d blocks erased.", blocksErased)
+	if !success {
+		msg = fmt.Sprintf("Format completed with errors. %d blocks erased, failed sectors: %v", blocksErased, failedSectors)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.Response{
+		Success: success,
+		Message: msg,
+		Data: models.CardFormatResponse{
+			SNRHex:        fmt.Sprintf("0x%08X", snr),
+			SNRDecimal:    snr,
+			BlocksErased:  blocksErased,
+			FailedSectors: failedSectors,
+		},
+	})
 }
 
 // respondError is a helper to send error responses

@@ -170,6 +170,46 @@
             },
             "description": "Resets all 15 sector keys back to the factory default (FFFFFFFFFFFF) by authenticating with the passkey. After this, the card can be written to without a password."
           }
+        },
+        {
+          "name": "Read NDEF Text",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"FFFFFFFFFFFF\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/read-ndef",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "read-ndef"]
+            },
+            "description": "Reads the raw NDEF text record from the card without any decryption. Works regardless of whether the card was written with MD5 or SHA256 encoding."
+          }
+        },
+        {
+          "name": "Format Card (Erase NDEF)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": 0,\n  \"key_mode\": 0,\n  \"key\": \"FFFFFFFFFFFF\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/card/format",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "card", "format"]
+            },
+            "description": "Erases all NDEF data by writing zeros to data blocks in sectors 1-15. Sector trailers (keys/access bits) are not changed. Equivalent to NFC Tools' format function."
+          }
         }
       ]
     },

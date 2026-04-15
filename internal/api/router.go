@@ -31,6 +31,8 @@ func NewRouter(r *reader.Reader, salt string) *chi.Mux {
 	router.Post("/api/v1/card/halt", cardHandlers.Halt)
 	router.Post("/api/v1/card/set-password", cardHandlers.SetPassword)
 	router.Post("/api/v1/card/remove-password", cardHandlers.RemovePassword)
+	router.Post("/api/v1/card/read-ndef", cardHandlers.ReadNDEF)
+	router.Post("/api/v1/card/format", cardHandlers.FormatCard)
 
 	// MD5 Endpoints
 	router.Post("/api/v1/card/1/read-decoded", cardHandlers.ReadDecodedMD5)

@@ -93,6 +93,21 @@ type CardSetPasswordResponse struct {
 	Locked        bool   `json:"locked"`          // true when all 15 sectors were locked
 }
 
+// CardFormatResponse is returned after erasing NDEF data from the card.
+type CardFormatResponse struct {
+	SNRHex        string `json:"snr_hex"`
+	SNRDecimal    uint32 `json:"snr_decimal"`
+	BlocksErased  int    `json:"blocks_erased"`
+	FailedSectors []int  `json:"failed_sectors,omitempty"`
+}
+
+// CardReadNDEFResponse is returned after reading raw NDEF text from the card.
+type CardReadNDEFResponse struct {
+	SNRHex     string `json:"snr_hex"`
+	SNRDecimal uint32 `json:"snr_decimal"`
+	Text       string `json:"text"`
+}
+
 // CardRemovePasswordResponse is returned after removing the write-protection password.
 type CardRemovePasswordResponse struct {
 	SNRHex          string `json:"snr_hex"`

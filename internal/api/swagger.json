@@ -299,6 +299,64 @@
                 }
             }
         },
+        "/api/v1/card/format": {
+            "post": {
+                "description": "Erases all NDEF data by writing zeros to data blocks in sectors 1-15. Sector trailers (keys/access bits) are not changed. Equivalent to NFC Tools' format function.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Card Operations"
+                ],
+                "summary": "Format (erase) card NDEF data",
+                "parameters": [
+                    {
+                        "description": "Format request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CardReadDecodedRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.CardFormatResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/card/halt": {
             "post": {
                 "description": "Deselects the card from the RF field",
@@ -370,6 +428,70 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/card/read-ndef": {
+            "post": {
+                "description": "Reads all card blocks and returns the raw NDEF text record content without any decryption. Works regardless of whether the card was written with MD5 or SHA256 encoding.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Card Operations"
+                ],
+                "summary": "Read raw NDEF text from card",
+                "parameters": [
+                    {
+                        "description": "Read request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CardReadDecodedRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.CardReadNDEFResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.DetailedErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/models.DetailedErrorResponse"
                         }
@@ -974,6 +1096,26 @@
                 }
             }
         },
+        "models.CardFormatResponse": {
+            "type": "object",
+            "properties": {
+                "blocks_erased": {
+                    "type": "integer"
+                },
+                "failed_sectors": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "snr_decimal": {
+                    "type": "integer"
+                },
+                "snr_hex": {
+                    "type": "string"
+                }
+            }
+        },
         "models.CardIdentifyResponse": {
             "type": "object",
             "properties": {
@@ -1034,6 +1176,20 @@
                     "type": "integer"
                 },
                 "snr_hex": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CardReadNDEFResponse": {
+            "type": "object",
+            "properties": {
+                "snr_decimal": {
+                    "type": "integer"
+                },
+                "snr_hex": {
+                    "type": "string"
+                },
+                "text": {
                     "type": "string"
                 }
             }
