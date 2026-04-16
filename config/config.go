@@ -20,13 +20,13 @@ type Config struct {
 // Load reads configuration from environment variables with sensible defaults
 func Load() *Config {
 	cfg := &Config{
-		ReaderPort:   getEnvInt("READER_PORT", 100),                    // 100 = USB
-		ReaderBaud:   getEnvInt("READER_BAUD", 115200),                 // baud rate
-		ServerAddr:   getEnv("SERVER_ADDR", ":8080"),                   // HTTP server bind address
-		DLLPath:      getEnv("DLL_PATH", "dcrf32.dll"),                 // DLL file path
-		LogFile:      getEnv("LOG_FILE", "logs/reader.log"),            // Log file path
-		GracefulWait: getEnvInt("GRACEFUL_WAIT", 5),                    // shutdown grace period in seconds
-		BrancaSalt:   getEnv("BRANCA_SALT", ""),                        // salt for SHA Branca key
+		ReaderPort:   getEnvInt("READER_PORT", 100),         // 100 = USB
+		ReaderBaud:   getEnvInt("READER_BAUD", 115200),      // baud rate
+		ServerAddr:   getEnv("SERVER_ADDR", ":8080"),        // HTTP server bind address
+		DLLPath:      getEnv("DLL_PATH", "dc_sdk.dll"),      // DLL file path
+		LogFile:      getEnv("LOG_FILE", "logs/reader.log"), // Log file path
+		GracefulWait: getEnvInt("GRACEFUL_WAIT", 5),         // shutdown grace period in seconds
+		BrancaSalt:   getEnv("BRANCA_SALT", ""),             // salt for SHA Branca key
 	}
 	return cfg
 }
